@@ -179,36 +179,92 @@ def run_job():
 
         # Continue with reports page interaction
         try:
+            # Set form fields in the correct order with delays between each
+            
+            # 1. Wait for the period dropdown to be present and select "Select dates"
             WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "lstPeriodOptions")))
-            Select(driver.find_element(By.ID, "lstPeriodOptions")).select_by_value("periodCustom")
-
+            period_select = Select(driver.find_element(By.ID, "lstPeriodOptions"))
+            period_select.select_by_value("periodCustom")
+            print("📅 Set Period to 'Select dates'", flush=True)
+            time.sleep(1)  # Wait for the date fields to appear
+            
+            # 2. Set Report Type to "Food Report" (it should be the default, but set it explicitly)
+            details_select = Select(driver.find_element(By.ID, "lstDetails"))
+            details_select.select_by_value("allFoods")
+            print("📊 Set Report Type to 'Food Report'", flush=True)
+            time.sleep(1)
+            
+            # 3. Set Nutrient Options to "Tracked Nutrients" (it should be the default, but set it explicitly)
+            nutrients_select = Select(driver.find_element(By.ID, "lstNutrients"))
+            nutrients_select.select_by_value("trackedNutrients")
+            print("🥗 Set Nutrient Options to 'Tracked Nutrients'", flush=True)
+            time.sleep(1)
+            
+            # 4. Calculate yesterday's date (since the script runs at 2:00 AM)
             yesterday = (date.today() - timedelta(days=1)).strftime("%d/%m/%Y")
-            today = date.today().strftime("%d/%m/%Y")
             
-            # Clear and fill start date input
-            driver.execute_script("document.getElementById('startDate').value = ''")
-            start_date_input = driver.find_element(By.ID, "startDate")
-            start_date_input.clear()
-            start_date_input.send_keys(yesterday)
-            print(f"📅 Set start date: {yesterday}", flush=True)
+            # 5. Handle the date fields with calendar button clicks
+            # For startDate (From)
+            try:
+                # Click the calendar button for the start date
+                start_cal_button = driver.find_element(By.XPATH, "//div[@id='startDateDiv']//button")
+                driver.execute_script("arguments[0].click();", start_cal_button)
+                print("📅 Clicked start date calendar button", flush=True)
+                time.sleep(1)
+                
+                # Now the datepicker should be visible, find and click yesterday's date
+                # This assumes the calendar opens to the current month with yesterday visible
+                # You might need to adjust this logic if the calendar UI is different
+                
+                # Try to find the day element with yesterday's day number
+                yesterday_day = (date.today() - timedelta(days=1)).day
+                day_element = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.XPATH, f"//td[contains(@class, 'day') and text()='{yesterday_day}']"))
+                )
+                driver.execute_script("arguments[0].click();", day_element)
+                print(f"📅 Selected day {yesterday_day} in calendar for start date", flush=True)
+                time.sleep(1)
+            except Exception as start_date_err:
+                print(f"⚠️ Could not set start date via calendar: {start_date_err}", flush=True)
+                # Fallback to JavaScript for start date
+                try:
+                    driver.execute_script(f"document.getElementById('startDate').value = '{yesterday}'")
+                    print(f"📅 Set start date with JavaScript: {yesterday}", flush=True)
+                except Exception as js_err:
+                    print(f"❌ Failed to set start date: {js_err}", flush=True)
             
-            # Clear and fill end date input - using direct input rather than JavaScript
-            driver.execute_script("document.getElementById('endDate').value = ''")
-            end_date_input = driver.find_element(By.ID, "endDate")
-            end_date_input.clear()
-            end_date_input.send_keys(today)
-            print(f"📅 Set end date: {today}", flush=True)
+            # For endDate (To) - also set to yesterday
+            try:
+                # Click the calendar button for the end date
+                end_cal_button = driver.find_element(By.XPATH, "//div[@id='endDateDiv']//button")
+                driver.execute_script("arguments[0].click();", end_cal_button)
+                print("📅 Clicked end date calendar button", flush=True)
+                time.sleep(1)
+                
+                # Find and click yesterday's date again
+                day_element = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.XPATH, f"//td[contains(@class, 'day') and text()='{yesterday_day}']"))
+                )
+                driver.execute_script("arguments[0].click();", day_element)
+                print(f"📅 Selected day {yesterday_day} in calendar for end date", flush=True)
+                time.sleep(1)
+            except Exception as end_date_err:
+                print(f"⚠️ Could not set end date via calendar: {end_date_err}", flush=True)
+                # Fallback to JavaScript for end date
+                try:
+                    driver.execute_script(f"document.getElementById('endDate').value = '{yesterday}'")
+                    print(f"📅 Set end date with JavaScript: {yesterday}", flush=True)
+                except Exception as js_err:
+                    print(f"❌ Failed to set end date: {js_err}", flush=True)
             
-            # Take a screenshot after setting both date fields
-            after_date_input_screenshot = f"/app/downloads/after_date_input_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
-            driver.save_screenshot(after_date_input_screenshot)
-            print(f"🖼 After date input screenshot: {after_date_input_screenshot}", flush=True)
+            # Take a screenshot after setting all form fields
+            form_filled_screenshot = f"/app/downloads/form_filled_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
+            driver.save_screenshot(form_filled_screenshot)
+            print(f"🖼 Form filled screenshot: {form_filled_screenshot}", flush=True)
             
-            # No need to explicitly submit - report updates automatically when fields are completed
-            print("⏳ Waiting for report to automatically update after date change...", flush=True)
-            
-            # Wait for the report to load - more robust waiting
-            time.sleep(5)  # Initial wait for any JavaScript to process
+            # Wait for the report to load after all fields are set
+            print("⏳ Waiting for report to update after form completion...", flush=True)
+            time.sleep(5)  # Initial wait for JavaScript processing
             
             # Wait for report table to be present
             WebDriverWait(driver, 15).until(
