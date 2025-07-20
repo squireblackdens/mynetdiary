@@ -3,7 +3,7 @@ import time
 import schedule
 import traceback
 from pathlib import Path
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -365,10 +365,43 @@ def run_job():
                     print(f"📋 Found {len(meal_rows)} meal sections", flush=True)
                     
                     current_meal = None
+                    meal_first_food_time = {}  # Store first food time for each meal
                     
                     # Process all rows in the table body
                     all_rows = report_table.find_elements(By.CSS_SELECTOR, "tbody tr")
                     
+                    # First pass: collect first food time for each meal
+                    for row in all_rows:
+                        try:
+                            # Check if this is a meal header row
+                            meal_header_cells = row.find_elements(By.CSS_SELECTOR, "td.nutrientTotals")
+                            if meal_header_cells:
+                                current_meal = meal_header_cells[0].text.strip()
+                                # Initialize meal time to None
+                                if current_meal not in meal_first_food_time:
+                                    meal_first_food_time[current_meal] = None
+                                continue
+                            
+                            # Check if this is a food item row and we don't have a time for this meal yet
+                            if (current_meal and meal_first_food_time[current_meal] is None and 
+                                row.find_elements(By.CSS_SELECTOR, "td.numeric")):
+                                try:
+                                    # Get the time of the food
+                                    time_cells = row.find_elements(By.CSS_SELECTOR, "td[title='Time']")
+                                    if time_cells and time_cells[0].text.strip():
+                                        time_text = time_cells[0].text.strip()
+                                        # Store the first food time for this meal
+                                        meal_first_food_time[current_meal] = time_text
+                                        print(f"⏰ First food in {current_meal} was at {time_text}", flush=True)
+                                except Exception as time_err:
+                                    print(f"⚠️ Error getting food time: {time_err}", flush=True)
+                        except Exception as row_scan_err:
+                            print(f"⚠️ Error scanning row for time: {row_scan_err}", flush=True)
+                    
+                    # Reset for main processing
+                    current_meal = None
+                    
+                    # Second pass: process all meal sections and food items
                     for row in all_rows:
                         try:
                             # Check if this is a meal header row
@@ -383,7 +416,8 @@ def run_job():
                                     meal_data = {
                                         "Date": report_date,
                                         "Meal": current_meal,
-                                        "Type": "meal_summary"
+                                        "Type": "meal_summary",
+                                        "Time": meal_first_food_time.get(current_meal, "")  # Add the first food time
                                     }
                                     
                                     for i, cell in enumerate(numeric_cells):
@@ -410,10 +444,44 @@ def run_job():
                                         point.tag("meal", meal_data["Meal"])
                                         point.tag("type", meal_data["Type"])
                                         
-                                        # Parse the date into a timestamp
-                                        meal_timestamp = datetime.strptime(meal_data["Date"], "%Y-%m-%d")
-                                        point.time(meal_timestamp, WritePrecision.NS)
+                                        # Use the first food time for the meal timestamp if available
+                                        meal_time_text = meal_data.get("Time", "")
+                                        time_match = re.search(r'(\d+):(\d+)', meal_time_text)
                                         
+                                        if time_match:
+                                            # We have a valid time for this meal
+                                            hour = int(time_match.group(1))
+                                            minute = int(time_match.group(2))
+                                            
+                                            # Create timestamp with the date and time
+                                            date_parts = report_date.split('-')
+                                            if len(date_parts) == 3:
+                                                year, month, day = map(int, date_parts)
+                                                # Create a timezone-aware datetime with the meal time
+                                                local_dt = datetime(year, month, day, hour, minute)
+                                                
+                                                # Convert to UTC for InfluxDB
+                                                local_tz = datetime.now().astimezone().tzinfo
+                                                local_aware_dt = local_dt.replace(tzinfo=local_tz)
+                                                utc_dt = local_aware_dt.astimezone(timezone.utc)
+                                                
+                                                meal_timestamp = utc_dt
+                                                print(f"⏰ Timestamp for {meal_data['Meal']}: Local {local_dt}, UTC {utc_dt}", flush=True)
+                                            else:
+                                                # Fallback to just the date
+                                                meal_timestamp = datetime.strptime(meal_data["Date"], "%Y-%m-%d")
+                                                # Create a timezone-aware datetime in UTC
+                                                local_tz = datetime.now().astimezone().tzinfo
+                                                meal_timestamp = meal_timestamp.replace(tzinfo=local_tz).astimezone(timezone.utc)
+                                        else:
+                                            # No time, use the date
+                                            meal_timestamp = datetime.strptime(meal_data["Date"], "%Y-%m-%d")
+                                            # Create a timezone-aware datetime in UTC
+                                            local_tz = datetime.now().astimezone().tzinfo
+                                            meal_timestamp = meal_timestamp.replace(tzinfo=local_tz).astimezone(timezone.utc)
+                                        
+                                        point.time(meal_timestamp, WritePrecision.NS)
+
                                         # Add all nutrient fields
                                         for key, value in meal_data.items():
                                             if key not in ["Date", "Meal", "Type"]:
@@ -493,7 +561,7 @@ def run_job():
                                     
                                     # Create InfluxDB point for the food item
                                     try:
-                                        # Parse the time (like "10:02") into hours and minutes
+                                        # Parse the time (like "10:03") into hours and minutes
                                         time_match = re.search(r'(\d+):(\d+)', time_text)
                                         if time_match:
                                             hour = int(time_match.group(1))
@@ -503,7 +571,21 @@ def run_job():
                                             date_parts = report_date.split('-')
                                             if len(date_parts) == 3:
                                                 year, month, day = map(int, date_parts)
-                                                food_timestamp = datetime(year, month, day, hour, minute)
+                                                # Create a timezone-aware datetime with the local time
+                                                local_dt = datetime(year, month, day, hour, minute)
+                                                
+                                                # Convert it to UTC for InfluxDB
+                                                # InfluxDB stores timestamps in UTC, so we need to adjust
+                                                # This assumes the times in MyNetDiary are in local time
+                                                # Get the local timezone
+                                                local_tz = datetime.now().astimezone().tzinfo
+                                                # Make the datetime timezone-aware
+                                                local_aware_dt = local_dt.replace(tzinfo=local_tz)
+                                                # Convert to UTC
+                                                utc_dt = local_aware_dt.astimezone(timezone.utc)
+                                                
+                                                food_timestamp = utc_dt
+                                                print(f"📅 Time for {food_data['Food']}: Local {local_dt}, UTC {utc_dt}", flush=True)
                                             else:
                                                 # Fallback to just using the date
                                                 food_timestamp = datetime.strptime(report_date, "%Y-%m-%d")
@@ -582,7 +664,11 @@ def run_job():
                     point.tag("type", day_data["Type"])
                     
                     # Parse the date into a timestamp
-                    day_timestamp = datetime.strptime(day_data["Date"], "%Y-%m-%d")
+                    day_date = datetime.strptime(day_data["Date"], "%Y-%m-%d")
+                    # Create a timezone-aware datetime in UTC
+                    local_tz = datetime.now().astimezone().tzinfo
+                    day_timestamp = day_date.replace(tzinfo=local_tz).astimezone(timezone.utc)
+                    
                     point.time(day_timestamp, WritePrecision.NS)
                     
                     # Add all nutrient fields
