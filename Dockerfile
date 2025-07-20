@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY main.py .
 
 # Create download directory
-# RUN mkdir -p /app/downloads
+RUN mkdir -p /app/downloads
 
 # Entrypoint
 CMD ["python", "main.py"]

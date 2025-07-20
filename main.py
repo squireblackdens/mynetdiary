@@ -375,17 +375,72 @@ def run_job():
                 # Write to InfluxDB if configuration exists
                 if INFLUX_URL and INFLUX_TOKEN and INFLUX_ORG and INFLUX_BUCKET:
                     print(f"💾 Writing data to InfluxDB at {INFLUX_URL}", flush=True)
+                    print(f"💾 Org: {INFLUX_ORG}, Bucket: {INFLUX_BUCKET}", flush=True)
+                    print(f"💾 Token: {INFLUX_TOKEN[:5]}...{INFLUX_TOKEN[-5:]}", flush=True)
                     
-                    client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
-                    write_api = client.write_api()
-                    
-                    # Write all data points
-                    write_api.write(bucket=INFLUX_BUCKET, record=data_points)
-                    write_api.close()
-                    
-                    print(f"✅ Successfully wrote {len(data_points)} data points to InfluxDB", flush=True)
+                    try:
+                        # Verify connection first
+                        client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
+                        health = client.health()
+                        print(f"💾 InfluxDB connection health: {health.status}", flush=True)
+                        
+                        # Check if bucket exists
+                        buckets_api = client.buckets_api()
+                        try:
+                            bucket = buckets_api.find_bucket_by_name(INFLUX_BUCKET)
+                            if bucket:
+                                print(f"💾 Found bucket: {INFLUX_BUCKET}", flush=True)
+                            else:
+                                print(f"⚠️ Bucket not found: {INFLUX_BUCKET}", flush=True)
+                        except Exception as bucket_err:
+                            print(f"⚠️ Error checking bucket: {bucket_err}", flush=True)
+                        
+                        # Now write the data
+                        write_api = client.write_api()
+                        
+                        # Log a sample of what we're writing
+                        if data_points:
+                            sample_point = data_points[0]
+                            print(f"💾 Sample point: {sample_point}", flush=True)
+                        
+                        # Write all data points
+                        write_api.write(bucket=INFLUX_BUCKET, record=data_points)
+                        write_api.close()
+                        
+                        print(f"✅ Successfully wrote {len(data_points)} data points to InfluxDB", flush=True)
+                        
+                        # Verify points were written by querying
+                        query_api = client.query_api()
+                        try:
+                            yesterday_date = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+                            query = f'from(bucket:"{INFLUX_BUCKET}") |> range(start: {yesterday_date}T00:00:00Z, stop: {yesterday_date}T23:59:59Z) |> filter(fn: (r) => r._measurement == "nutrition_data") |> limit(n:1)'
+                            
+                            result = query_api.query(query=query)
+                            
+                            if result and len(result) > 0:
+                                print(f"✅ Verified data was written - found {len(result)} records", flush=True)
+                            else:
+                                print("⚠️ Could not verify data was written - query returned no results", flush=True)
+                        except Exception as query_err:
+                            print(f"⚠️ Error verifying data write: {query_err}", flush=True)
+                        
+                        client.close()
+                    except Exception as influx_err:
+                        print(f"❌ InfluxDB error: {influx_err}", flush=True)
+                        print(f"❌ InfluxDB error type: {type(influx_err)}", flush=True)
+                        traceback.print_exc()
                 else:
-                    print("⚠️ InfluxDB configuration missing, skipping data upload", flush=True)
+                    missing = []
+                    if not INFLUX_URL:
+                        missing.append("INFLUX_URL")
+                    if not INFLUX_TOKEN:
+                        missing.append("INFLUX_TOKEN")
+                    if not INFLUX_ORG:
+                        missing.append("INFLUX_ORG")
+                    if not INFLUX_BUCKET:
+                        missing.append("INFLUX_BUCKET")
+                    
+                    print(f"⚠️ InfluxDB configuration missing: {', '.join(missing)}", flush=True)
                     
             except Exception as parsing_err:
                 print(f"❌ Error parsing or uploading report data: {parsing_err}", flush=True)
