@@ -288,88 +288,178 @@ def run_job():
                 # Find the report table
                 report_table = driver.find_element(By.CSS_SELECTOR, "table.report")
                 
-                # Extract table headers
+                # Extract table headers - the headers in this table are in a special format with rotated text
                 headers = []
-                header_cells = report_table.find_elements(By.CSS_SELECTOR, "thead th")
-                for cell in header_cells:
-                    headers.append(cell.text.strip())
-                
-                print(f"📋 Found headers: {headers}", flush=True)
-                
-                # Extract table rows
-                rows = report_table.find_elements(By.CSS_SELECTOR, "tbody tr")
-                print(f"📋 Found {len(rows)} data rows", flush=True)
-                
-                # Process data rows
-                data_points = []
-                
-                for row in rows:
-                    cells = row.find_elements(By.TAG_NAME, "td")
-                    row_data = {}
+                try:
+                    # First try to get the rotated headers which are in <span class="rotate"> inside <td class="rotatedTd">
+                    header_cells = report_table.find_elements(By.CSS_SELECTOR, "thead tr td.rotatedTd span.rotate")
+                    for cell in header_cells:
+                        # Clean up the header text (remove non-breaking spaces and commas)
+                        header_text = cell.text.strip().replace('\xa0', ' ').split(',')[0]
+                        headers.append(header_text)
                     
-                    # Skip empty rows
-                    if len(cells) < 2:
-                        continue
+                    # Add the "Time" header which is in a different format
+                    time_header = report_table.find_element(By.CSS_SELECTOR, "thead tr td[style*='vertical-align: bottom']")
+                    if time_header.text.strip():
+                        headers.append(time_header.text.strip())
                     
-                    # Extract data from each cell
-                    for i, cell in enumerate(cells):
-                        if i < len(headers):
-                            row_data[headers[i]] = cell.text.strip()
+                    print(f"📋 Found rotated headers: {headers}", flush=True)
+                except Exception as rotated_err:
+                    print(f"⚠️ Error finding rotated headers: {rotated_err}", flush=True)
                     
-                    # Create a data point for InfluxDB
-                    if 'Date' in row_data:
+                    # Fallback: Try to extract header titles from the title attributes
+                    try:
+                        header_cells = report_table.find_elements(By.CSS_SELECTOR, "thead tr td[title]")
+                        for cell in header_cells:
+                            title = cell.get_attribute("title")
+                            if title and "column" in title:
+                                # Extract nutrient name from title like "Calories column"
+                                nutrient = title.replace(" column", "").strip()
+                                headers.append(nutrient)
+                        
+                        print(f"📋 Found headers from title attributes: {headers}", flush=True)
+                    except Exception as title_err:
+                        print(f"⚠️ Error finding headers from titles: {title_err}", flush=True)
+                
+                # If still no headers, use default headers based on the table structure
+                if not headers:
+                    print("⚠️ Using default headers based on table structure", flush=True)
+                    headers = ["Date", "Calories", "Total Fat", "Carbs", "Protein", "Sat. Fat", 
+                               "Trans Fat", "Net Carbs", "Fiber", "Sodium", "Calcium", "Time"]
+                
+                print(f"📋 Final headers list: {headers}", flush=True)
+                
+                # Extract data rows - focus on the daily information row
+                try:
+                    # Look for rows with class "day" which contain the daily summary
+                    day_rows = report_table.find_elements(By.CSS_SELECTOR, "tbody tr.day")
+                    print(f"📋 Found {len(day_rows)} day summary rows", flush=True)
+                    
+                    # Process each day row
+                    data_points = []
+                    
+                    for day_row in day_rows:
+                        row_data = {}
+                        
+                        # Extract the date from the h4 element in the first column
                         try:
-                            # Parse date from the report (assuming format like MM/DD/YYYY)
-                            # Adjust format as needed based on actual data
-                            date_str = row_data['Date']
+                            date_element = day_row.find_element(By.CSS_SELECTOR, "h4")
+                            date_text = date_element.text.strip()
+                            # Parse something like "Saturday, Jul 19" into a date
+                            print(f"📅 Found date text: {date_text}", flush=True)
                             
-                            # Create an InfluxDB point
-                            point = Point("nutrition_data")
-                            
-                            # Add timestamp (convert to proper format for InfluxDB)
+                            # Add the year which is in the URL parameter
                             try:
-                                # Try different date formats
-                                try:
-                                    # MM/DD/YYYY format
-                                    timestamp = datetime.strptime(date_str, "%m/%d/%Y")
-                                except ValueError:
-                                    try:
-                                        # DD/MM/YYYY format
-                                        timestamp = datetime.strptime(date_str, "%d/%m/%Y")
-                                    except ValueError:
-                                        # YYYY-MM-DD format
-                                        timestamp = datetime.strptime(date_str, "%Y-%m-%d")
-                            except Exception as date_err:
-                                print(f"⚠️ Could not parse date '{date_str}': {date_err}", flush=True)
-                                # Use current time as fallback
-                                timestamp = datetime.utcnow()
-                            
-                            point.time(timestamp, WritePrecision.NS)
-                            
-                            # Add all other fields as tags or fields
-                            for key, value in row_data.items():
-                                if key == 'Date':
-                                    continue  # Already used for timestamp
+                                link_element = day_row.find_element(By.CSS_SELECTOR, "a.dailyReportLink")
+                                href = link_element.get_attribute("href")
+                                if "date=" in href:
+                                    date_param = href.split("date=")[1].split("&")[0]
+                                    if len(date_param) == 8:  # Format: YYYYMMDD
+                                        year = date_param[:4]
+                                        month = date_param[4:6]
+                                        day = date_param[6:8]
+                                        full_date = f"{year}-{month}-{day}"
+                                        row_data["Date"] = full_date
+                                        print(f"📅 Extracted full date from link: {full_date}", flush=True)
+                            except Exception as link_err:
+                                print(f"⚠️ Error extracting date from link: {link_err}", flush=True)
+                                row_data["Date"] = date_text
+                        except Exception as date_err:
+                            print(f"⚠️ Error extracting date: {date_err}", flush=True)
+                            # Use yesterday's date as fallback
+                            row_data["Date"] = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+                        
+                        # Extract nutrient data from the cells
+                        cells = day_row.find_elements(By.CSS_SELECTOR, "td.numeric")
+                        print(f"📋 Found {len(cells)} numeric cells in day row", flush=True)
+                        
+                        for i, cell in enumerate(cells):
+                            if i < len(headers) - 1:  # Skip Time which isn't in the day summary
+                                # Clean up the text: remove 'cals', 'g', 'mg', etc.
+                                value_text = cell.text.strip()
                                 
-                                # Try to convert numeric values
+                                # Print raw value for debugging
+                                print(f"📊 Raw value for {headers[i]}: '{value_text}'", flush=True)
+                                
+                                # Extract numeric value
+                                import re
+                                # Match numbers including commas and decimals
+                                numeric_match = re.search(r'([\d,\.]+)', value_text)
+                                if numeric_match:
+                                    value = numeric_match.group(1).replace(',', '')
+                                    try:
+                                        row_data[headers[i]] = float(value)
+                                    except ValueError:
+                                        row_data[headers[i]] = value_text
+                                else:
+                                    row_data[headers[i]] = value_text
+                        
+                        print(f"📊 Extracted row data: {row_data}", flush=True)
+                        
+                        # Create InfluxDB point
+                        if row_data and "Date" in row_data:
+                            try:
+                                point = Point("nutrition_data")
+                                
+                                # Parse the date
                                 try:
-                                    # Remove any non-numeric characters (like commas or units)
-                                    clean_value = ''.join(c for c in value if c.isdigit() or c == '.' or c == '-')
-                                    if clean_value:
-                                        # Try to convert to float
-                                        numeric_value = float(clean_value)
-                                        point.field(key, numeric_value)
+                                    # Try different date formats
+                                    if "-" in row_data["Date"]:
+                                        # YYYY-MM-DD format
+                                        timestamp = datetime.strptime(row_data["Date"], "%Y-%m-%d")
+                                    elif "/" in row_data["Date"]:
+                                        # Try both MM/DD/YYYY and DD/MM/YYYY
+                                        try:
+                                            timestamp = datetime.strptime(row_data["Date"], "%m/%d/%Y")
+                                        except ValueError:
+                                            timestamp = datetime.strptime(row_data["Date"], "%d/%m/%Y")
                                     else:
-                                        # Keep as string if not numeric
-                                        point.tag(key, value)
-                                except ValueError:
-                                    # Keep as string if conversion fails
-                                    point.tag(key, value)
-                            
-                            data_points.append(point)
-                        except Exception as point_err:
-                            print(f"⚠️ Error creating data point: {point_err}", flush=True)
-                
+                                        # Try to parse text format like "Saturday, Jul 19"
+                                        month_abbr = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+                                                     "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
+                                        
+                                        parts = row_data["Date"].split(", ")[1].split(" ")
+                                        if len(parts) == 2:
+                                            month = month_abbr.get(parts[0], 1)
+                                            day = int(parts[1])
+                                            year = date.today().year
+                                            timestamp = datetime(year, month, day)
+                                except Exception as date_parse_err:
+                                    print(f"⚠️ Could not parse date '{row_data['Date']}': {date_parse_err}", flush=True)
+                                    timestamp = datetime.utcnow()
+                                
+                                point.time(timestamp, WritePrecision.NS)
+                                
+                                # Add all other fields
+                                for key, value in row_data.items():
+                                    if key == "Date":
+                                        continue  # Already used for timestamp
+                                    
+                                    if isinstance(value, (int, float)):
+                                        point.field(key, value)
+                                    else:
+                                        # Convert string to number if possible
+                                        try:
+                                            # Remove any non-numeric characters (like commas or units)
+                                            clean_value = ''.join(c for c in str(value) if c.isdigit() or c == '.' or c == '-')
+                                            if clean_value:
+                                                numeric_value = float(clean_value)
+                                                point.field(key, numeric_value)
+                                            else:
+                                                # Keep as string if not numeric
+                                                point.tag(key, str(value))
+                                        except ValueError:
+                                            # Keep as string if conversion fails
+                                            point.tag(key, str(value))
+                                
+                                data_points.append(point)
+                                print(f"📊 Created data point for date: {row_data['Date']}", flush=True)
+                            except Exception as point_err:
+                                print(f"⚠️ Error creating data point: {point_err}", flush=True)
+                    
+                except Exception as day_row_err:
+                    print(f"❌ Error processing day rows: {day_row_err}", flush=True)
+                    
                 print(f"📊 Created {len(data_points)} data points", flush=True)
                 
                 # Write to InfluxDB if configuration exists
