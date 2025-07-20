@@ -307,6 +307,11 @@ def run_job():
                 driver.save_screenshot(report_error_screenshot)
                 print(f"🖼 Report error screenshot: {report_error_screenshot}", flush=True)
                 # Don't raise the exception to allow cleanup to continue
+        except Exception as report_err:
+            print(f"❌ Error interacting with reports page: {report_err}", flush=True)
+            report_err_screenshot = f"/app/downloads/report_interaction_error_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
+            driver.save_screenshot(report_err_screenshot)
+            print(f"🖼 Report interaction error screenshot: {report_err_screenshot}", flush=True)
 
     except Exception as e:
         error_time = datetime.now().strftime("%Y%m%d-%H%M%S")
