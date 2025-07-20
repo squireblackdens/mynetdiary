@@ -27,7 +27,7 @@ def run_job():
 
     driver = webdriver.Chrome(options=chrome_options)
     try:
-        driver.get("https://www.mynetdiary.com/login.do")
+        driver.get("https://www.mynetdiary.com/logonPage.do")
         driver.find_element(By.ID, "username-or-email").send_keys(EMAIL)
         driver.find_element(By.ID, "password").send_keys(PASSWORD)
         driver.find_element(By.NAME, "login").click()
