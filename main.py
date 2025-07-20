@@ -48,15 +48,39 @@ def run_job():
         driver.find_element(By.XPATH, "//button[.//span[text()='SIGN IN']]").click()
         print("🔐 Submitted login form", flush=True)
 
-        # Wait for Dashboard tab to appear as login success indicator
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((
-                By.XPATH,
-                "//div[contains(@class, 'MuiTabs-flexContainer') and @role='tablist']//button[.//span[text()='Dashboard']]"
-            ))
-        )
-        print("✅ Login successful - Dashboard tab detected", flush=True)
-        print("✅ Login successful", flush=True)
+        # Save HTML and screenshot after login submit for debugging
+        debug_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+        debug_html = f"/app/downloads/after_login_{debug_time}.html"
+        debug_screenshot = f"/app/downloads/after_login_{debug_time}.png"
+        with open(debug_html, "w", encoding="utf-8") as f:
+            f.write(driver.page_source)
+        driver.save_screenshot(debug_screenshot)
+        print(f"📝 HTML after login saved: {debug_html}", flush=True)
+        print(f"🖼 Screenshot after login saved: {debug_screenshot}", flush=True)
+
+        # Wait a bit for any redirects or JS rendering
+        time.sleep(2)
+
+        try:
+            # Wait for Dashboard tab to appear as login success indicator
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((
+                    By.XPATH,
+                    "//div[contains(@class, 'MuiTabs-flexContainer') and @role='tablist']//button[.//span[text()='Dashboard']]"
+                ))
+            )
+            print("✅ Login successful - Dashboard tab detected", flush=True)
+            print("✅ Login successful", flush=True)
+        except Exception:
+            # Save HTML and screenshot for debugging
+            fail_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+            fail_html = f"/app/downloads/dashboard_not_found_{fail_time}.html"
+            fail_screenshot = f"/app/downloads/dashboard_not_found_{fail_time}.png"
+            with open(fail_html, "w", encoding="utf-8") as f:
+                f.write(driver.page_source)
+            driver.save_screenshot(fail_screenshot)
+            print(f"❌ Dashboard tab not found after login. HTML: {fail_html}, Screenshot: {fail_screenshot}", flush=True)
+            raise
 
         # --- REPORT PAGE ---
         print("📊 Opening reports page", flush=True)
