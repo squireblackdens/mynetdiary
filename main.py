@@ -48,7 +48,14 @@ def run_job():
         driver.find_element(By.XPATH, "//button[.//span[text()='SIGN IN']]").click()
         print("🔐 Submitted login form", flush=True)
 
-        WebDriverWait(driver, 10).until(EC.url_contains("dashboard"))
+        # Wait for Dashboard tab to appear as login success indicator
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((
+                By.XPATH,
+                "//div[contains(@class, 'MuiTabs-flexContainer') and @role='tablist']//button[.//span[text()='Dashboard']]"
+            ))
+        )
+        print("✅ Login successful - Dashboard tab detected", flush=True)
         print("✅ Login successful", flush=True)
 
         # --- REPORT PAGE ---
