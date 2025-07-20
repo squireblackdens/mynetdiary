@@ -184,35 +184,30 @@ def run_job():
 
             yesterday = (date.today() - timedelta(days=1)).strftime("%d/%m/%Y")
             today = date.today().strftime("%d/%m/%Y")
-            driver.execute_script(f"document.getElementById('startDate').value = '{yesterday}'")
-            driver.execute_script(f"document.getElementById('endDate').value = '{today}'")
-            print(f"📅 Set date range: {yesterday} to {today}", flush=True)
             
-            # Submit the date range form to load the report
-            try:
-                # Try to find and click the "show report" button
-                show_report_button = WebDriverWait(driver, 5).until(
-                    EC.element_to_be_clickable((By.XPATH, "//input[@type='submit' and @value='Show Report']"))
-                )
-                driver.execute_script("arguments[0].click();", show_report_button)
-                print("📊 Clicked 'Show Report' button", flush=True)
-            except Exception as button_err:
-                print(f"ℹ️ Could not find 'Show Report' button, report may load automatically: {button_err}", flush=True)
-                # If button not found, try pressing Enter in the date field
-                try:
-                    end_date = driver.find_element(By.ID, "endDate")
-                    end_date.send_keys(webdriver.Keys.ENTER)
-                    print("📊 Pressed Enter on date field to load report", flush=True)
-                except Exception as enter_err:
-                    print(f"ℹ️ Could not press Enter on date field: {enter_err}", flush=True)
+            # Clear and fill start date input
+            driver.execute_script("document.getElementById('startDate').value = ''")
+            start_date_input = driver.find_element(By.ID, "startDate")
+            start_date_input.clear()
+            start_date_input.send_keys(yesterday)
+            print(f"📅 Set start date: {yesterday}", flush=True)
             
-            # Take a screenshot after setting date range
-            date_range_screenshot = f"/app/downloads/date_range_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
-            driver.save_screenshot(date_range_screenshot)
-            print(f"🖼 Date range set screenshot: {date_range_screenshot}", flush=True)
+            # Clear and fill end date input - using direct input rather than JavaScript
+            driver.execute_script("document.getElementById('endDate').value = ''")
+            end_date_input = driver.find_element(By.ID, "endDate")
+            end_date_input.clear()
+            end_date_input.send_keys(today)
+            print(f"📅 Set end date: {today}", flush=True)
+            
+            # Take a screenshot after setting both date fields
+            after_date_input_screenshot = f"/app/downloads/after_date_input_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
+            driver.save_screenshot(after_date_input_screenshot)
+            print(f"🖼 After date input screenshot: {after_date_input_screenshot}", flush=True)
+            
+            # No need to explicitly submit - report updates automatically when fields are completed
+            print("⏳ Waiting for report to automatically update after date change...", flush=True)
             
             # Wait for the report to load - more robust waiting
-            print("⏳ Waiting for report to load after date change...", flush=True)
             time.sleep(5)  # Initial wait for any JavaScript to process
             
             # Wait for report table to be present
