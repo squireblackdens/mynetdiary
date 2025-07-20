@@ -30,7 +30,7 @@ def run_job():
         driver.get("https://www.mynetdiary.com/logonPage.do")
         driver.find_element(By.ID, "username-or-email").send_keys(EMAIL)
         driver.find_element(By.ID, "password").send_keys(PASSWORD)
-        driver.find_element(By.NAME, "login").click()
+        driver.find_element(By.XPATH, "//button[.//span[text()='SIGN IN']]").click()
         time.sleep(3)
 
         driver.get("https://www.mynetdiary.com/reports.do")
