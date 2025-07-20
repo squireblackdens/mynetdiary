@@ -43,36 +43,84 @@ def run_job():
         driver.get("https://www.mynetdiary.com/logonPage.do")
 
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "username-or-email")))
-        driver.find_element(By.ID, "username-or-email").send_keys(EMAIL)
-        driver.find_element(By.ID, "password").send_keys(PASSWORD)
-        driver.find_element(By.XPATH, "//button[.//span[text()='SIGN IN']]").click()
+        
+        # Fill in the form fields
+        username_field = driver.find_element(By.ID, "username-or-email")
+        password_field = driver.find_element(By.ID, "password")
+        
+        # Clear fields first to ensure clean input
+        username_field.clear()
+        password_field.clear()
+        
+        # Type the credentials
+        username_field.send_keys(EMAIL)
+        password_field.send_keys(PASSWORD)
+        
+        # Save the login form HTML before submitting for comparison
+        initial_html = driver.page_source
+        
+        # Optional: Check the "Remember me" checkbox
+        try:
+            remember_me = driver.find_element(By.XPATH, "//input[@type='checkbox' and contains(@class, 'jss107')]")
+            if not remember_me.is_selected():
+                # Click the parent span since the checkbox might be hidden
+                remember_me_label = driver.find_element(By.XPATH, "//span[contains(@class, 'MuiTypography-body1') and text()='Remember me on this computer']")
+                remember_me_label.click()
+                print("✓ Selected 'Remember me' checkbox", flush=True)
+        except Exception as e:
+            print(f"ℹ️ Could not select 'Remember me' checkbox: {str(e)}", flush=True)
+        
+        # Try submitting the form by pressing Enter on the password field first
+        try:
+            print("🔑 Attempting form submission via Enter key", flush=True)
+            password_field.send_keys("\n")
+            time.sleep(1)
+        except Exception:
+            pass
+            
+        # Fallback: Click the sign-in button explicitly
+        try:
+            signin_button = driver.find_element(By.XPATH, "//button[.//span[text()='SIGN IN']]")
+            signin_button.click()
+            print("🔐 Clicked SIGN IN button", flush=True)
+        except Exception as e:
+            print(f"⚠️ Could not click SIGN IN button: {str(e)}", flush=True)
+            # Try JavaScript click as a last resort
+            try:
+                driver.execute_script("document.querySelector('button span.MuiButton-label-139.jss16').closest('button').click();")
+                print("🔐 Used JavaScript to click SIGN IN button", flush=True)
+            except Exception:
+                pass
+                
         print("🔐 Submitted login form", flush=True)
 
-        # Wait for either dashboard or login error or URL change
-        time.sleep(2)  # Give JS a moment to process
+        # Wait for processing
+        time.sleep(3)  # Increase wait time to allow for form processing
 
         # Print current URL for debugging
         print(f"🌐 Current URL after login submit: {driver.current_url}", flush=True)
 
-        # Wait up to 15s for either dashboard, or error message, or URL change
+        # Wait up to 15s for either dashboard, or URL change, or page change
         dashboard_xpath = "//div[contains(@class, 'MuiTabs-flexContainer') and @role='tablist']//button[.//span[text()='Dashboard']]"
-        login_error_xpath = "//div[contains(@class, 'signin__notification')]"
         initial_url = driver.current_url
+        
+        # More specific error detection
+        login_error_xpath = "//div[contains(@class, 'alert') or contains(@class, 'error-message')]"
 
         try:
             WebDriverWait(driver, 15).until(
                 lambda d: (
                     d.current_url != initial_url or
                     d.find_elements(By.XPATH, dashboard_xpath) or
-                    d.find_elements(By.XPATH, login_error_xpath)
+                    d.page_source != initial_html  # Check if page content changed
                 )
             )
         except Exception:
-            print("❌ Neither dashboard nor error message appeared, and URL did not change.", flush=True)
+            print("❌ No changes detected after login attempt.", flush=True)
 
-        # Check for login error
+        # Check for real login errors (alert or error messages that appear after clicking login)
         error_elems = driver.find_elements(By.XPATH, login_error_xpath)
-        if error_elems:
+        if error_elems and error_elems[0].is_displayed():
             print("❌ Login error detected.", flush=True)
             print(f"🔎 Error message: {error_elems[0].text}", flush=True)
             # Save HTML and screenshot for debugging
@@ -92,17 +140,31 @@ def run_job():
             print("✅ Login successful - Dashboard tab detected", flush=True)
             print("✅ Login successful", flush=True)
         else:
-            print("❌ Dashboard tab not found after login, but no explicit error message.", flush=True)
-            # Save HTML and screenshot for debugging
-            fail_time = datetime.now().strftime("%Y%m%d-%H%M%S")
-            fail_html = f"/app/downloads/dashboard_not_found_{fail_time}.html"
-            fail_screenshot = f"/app/downloads/dashboard_not_found_{fail_time}.png"
-            with open(fail_html, "w", encoding="utf-8") as f:
-                f.write(driver.page_source)
-            driver.save_screenshot(fail_screenshot)
-            print(f"📝 HTML with missing dashboard saved: {fail_html}", flush=True)
-            print(f"🖼 Screenshot with missing dashboard saved: {fail_screenshot}", flush=True)
-            raise Exception("Login did not reach dashboard.")
+            # Try clicking the sign-in button again (sometimes the first click doesn't register)
+            try:
+                print("⚠️ Dashboard not found, trying to click sign-in again", flush=True)
+                driver.find_element(By.XPATH, "//button[.//span[text()='SIGN IN']]").click()
+                time.sleep(3)  # Wait a bit longer this time
+                
+                # Check again for dashboard
+                dashboard_elems = driver.find_elements(By.XPATH, dashboard_xpath)
+                if dashboard_elems:
+                    print("✅ Login successful after second attempt - Dashboard tab detected", flush=True)
+                    print("✅ Login successful", flush=True)
+                else:
+                    raise Exception("Dashboard not found after second login attempt")
+            except Exception as e:
+                print(f"❌ Second login attempt failed: {str(e)}", flush=True)
+                # Save HTML and screenshot for debugging
+                fail_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+                fail_html = f"/app/downloads/dashboard_not_found_{fail_time}.html"
+                fail_screenshot = f"/app/downloads/dashboard_not_found_{fail_time}.png"
+                with open(fail_html, "w", encoding="utf-8") as f:
+                    f.write(driver.page_source)
+                driver.save_screenshot(fail_screenshot)
+                print(f"📝 HTML with missing dashboard saved: {fail_html}", flush=True)
+                print(f"🖼 Screenshot with missing dashboard saved: {fail_screenshot}", flush=True)
+                raise Exception("Login did not reach dashboard.")
 
         # --- REPORT PAGE ---
         print("📊 Opening reports page", flush=True)
