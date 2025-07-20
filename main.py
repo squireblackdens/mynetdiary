@@ -25,11 +25,18 @@ PASSWORD = os.getenv("MND_PASSWORD")
 def run_job():
     print(f"🕑 Job started at {datetime.now()}", flush=True)
 
+    # Create a unique temporary directory for Chrome user data
+    import tempfile
+    temp_dir = tempfile.mkdtemp(prefix="chrome_user_data_")
+    
     chrome_options = Options()
-    # Temporarily disable headless mode for debugging
-    # chrome_options.add_argument("--headless=new")
+    # Re-enable headless mode as this is likely running in a container
+    chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    
+    # Specify unique user data directory to avoid conflicts
+    chrome_options.add_argument(f"--user-data-dir={temp_dir}")
     
     # Add user agent to appear as a regular browser
     chrome_options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36")
@@ -45,9 +52,12 @@ def run_job():
     # Set window size to ensure mobile elements don't appear
     chrome_options.add_argument("--window-size=1920,1080")
 
-    driver = webdriver.Chrome(options=chrome_options)
-
+    driver = None
+    
     try:
+        print("🌐 Initializing Chrome WebDriver", flush=True)
+        driver = webdriver.Chrome(options=chrome_options)
+        
         # --- LOGIN ---
         print("🌐 Navigating to login page", flush=True)
         driver.get("https://www.mynetdiary.com/logonPage.do")
@@ -195,11 +205,12 @@ def run_job():
         html_dump = f"/app/downloads/error_{error_time}.html"
 
         try:
-            driver.save_screenshot(screenshot)
-            with open(html_dump, "w", encoding="utf-8") as f:
-                f.write(driver.page_source)
-            print(f"🖼 Screenshot saved: {screenshot}", flush=True)
-            print(f"📝 HTML saved: {html_dump}", flush=True)
+            if driver is not None:
+                driver.save_screenshot(screenshot)
+                with open(html_dump, "w", encoding="utf-8") as f:
+                    f.write(driver.page_source)
+                print(f"🖼 Screenshot saved: {screenshot}", flush=True)
+                print(f"📝 HTML saved: {html_dump}", flush=True)
         except Exception as dump_err:
             print(f"⚠️ Could not save debug info: {dump_err}", flush=True)
 
@@ -207,14 +218,27 @@ def run_job():
         traceback.print_exc()
 
     finally:
-        driver.quit()
+        # Clean up resources
+        if driver is not None:
+            driver.quit()
+        
+        # Try to clean up the temp directory
+        try:
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            print(f"🧹 Cleaned up temporary directory: {temp_dir}", flush=True)
+        except Exception as cleanup_err:
+            print(f"⚠️ Could not clean up temporary directory: {cleanup_err}", flush=True)
 
-# Run immediately
+# Run once to avoid parallel execution
 run_job()
 
-# Schedule 2am daily
+# Schedule 2am daily (but don't run immediately again)
 schedule.every().day.at("02:00").do(run_job)
 print("📆 Scheduled daily run at 02:00", flush=True)
+
+# Add a short delay before entering the main loop
+time.sleep(5)
 
 while True:
     schedule.run_pending()
