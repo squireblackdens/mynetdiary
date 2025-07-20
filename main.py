@@ -9,8 +9,11 @@ from selenium.webdriver.chrome.options import Options
 EMAIL = os.getenv("MND_EMAIL")
 PASSWORD = os.getenv("MND_PASSWORD")
 
+print("🚀 MyNetDiary Scheduler started", flush=True)
+print(f"🌍 Timezone: {os.getenv('TZ')}", flush=True)
+
 def run_job():
-    print(f"--- Job started at {datetime.now()} ---")
+    print(f"🕑 Job started at {datetime.now()}", flush=True)
 
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
@@ -38,12 +41,16 @@ def run_job():
     finally:
         driver.quit()
 
-    print("✅ CSV downloaded.")
+    print("✅ CSV downloaded.", flush=True)
+
+# Run once immediately at startup
+print("⚡ Running job immediately after container starts", flush=True)
+run_job()
 
 # Schedule daily run at 2am
 schedule.every().day.at("02:00").do(run_job)
+print("📆 Scheduled job to run at 02:00 daily", flush=True)
 
-print("🕒 Waiting to run daily at 02:00...")
 while True:
     schedule.run_pending()
     time.sleep(30)
