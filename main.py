@@ -608,7 +608,7 @@ def run_job():
                                             total_fiber += float(row['Dietary Fiber, g'])
                                         
                                         # Sodium
-                                        if 'Sodium, mg' in row and not pd.isna row['Sodium, mg']:
+                                        if 'Sodium, mg' in row and not pd.isna(row['Sodium, mg']):
                                             total_sodium += float(row['Sodium, mg'])
                                         
                                         # Calcium
