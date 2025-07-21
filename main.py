@@ -715,6 +715,9 @@ def run_job():
                             except Exception as summary_err:
                                 print(f"❌ Error creating meal summary: {summary_err}", flush=True)
                                 traceback.print_exc()
+                except Exception as pandas_err:
+                    print(f"❌ Error using pandas to process Excel file: {pandas_err}", flush=True)
+                    traceback.print_exc()
             
             # Write the data points to InfluxDB - this must be outside of any incomplete try blocks
             if data_points:
@@ -841,4 +844,3 @@ time.sleep(5)
 while True:
     schedule.run_pending()
     time.sleep(30)
-    
