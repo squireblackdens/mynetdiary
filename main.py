@@ -12,6 +12,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from influxdb_client import InfluxDBClient, Point, WritePrecision
+import pandas as pd
 
 # InfluxDB v2 config (set these as environment variables)
 INFLUX_URL = os.getenv("INFLUX_URL")
@@ -199,8 +200,7 @@ def run_job():
         print("📊 Processing Excel file...", flush=True)
         
         try:
-            # Use csv module to read XLS (works for simple Excel files)
-            # One week ago from today
+            # Get the date from one week ago
             one_week_ago = datetime.now().date() - timedelta(days=7)
             data_points = []
             
@@ -216,116 +216,226 @@ def run_job():
                 headers = [sheet.cell_value(0, col) for col in range(sheet.ncols)]
                 print(f"📊 Found headers: {headers}", flush=True)
                 
+                # Find the index of the 'Date & Time' column
+                date_time_idx = -1
+                meal_idx = -1
+                for idx, header in enumerate(headers):
+                    if header.strip() == 'Date & Time':
+                        date_time_idx = idx
+                    elif header.strip() == 'Meal':
+                        meal_idx = idx
+                
+                if date_time_idx == -1:
+                    print("⚠️ Could not find 'Date & Time' column in the Excel file", flush=True)
+                    raise Exception("Missing 'Date & Time' column")
+                
+                if meal_idx == -1:
+                    print("⚠️ Could not find 'Meal' column in the Excel file", flush=True)
+                    raise Exception("Missing 'Meal' column")
+                
+                # Group data points by meal type
+                meal_data = {}
+                recent_entries = 0
+                
                 # Process rows
                 for row_idx in range(1, sheet.nrows):
                     try:
-                        row_data = {}
-                        for col_idx in range(sheet.ncols):
-                            cell_value = sheet.cell_value(row_idx, col_idx)
-                            if col_idx < len(headers):
-                                row_data[headers[col_idx]] = cell_value
+                        # Get date/time value
+                        date_time_val = sheet.cell_value(row_idx, date_time_idx)
+                        meal_val = sheet.cell_value(row_idx, meal_idx)
                         
-                        # Process row data and check date
-                        row_date_str = row_data.get('Date', None)
-                        if row_date_str:
-                            # Try to parse the date
+                        # Parse the date/time
+                        if isinstance(date_time_val, str):
+                            # Try different date formats (MyNetDiary format is typically MM/DD/YYYY hh:mm)
                             try:
-                                if isinstance(row_date_str, str):
-                                    # Try different date formats
-                                    date_formats = ['%Y-%m-%d', '%m/%d/%Y']
-                                    for fmt in date_formats:
-                                        try:
-                                            row_date = datetime.strptime(row_date_str, fmt).date()
-                                            break
-                                        except ValueError:
-                                            continue
-                                    else:
-                                        print(f"⚠️ Could not parse date string: {row_date_str}", flush=True)
-                                        continue
-                                elif isinstance(row_date_str, float):
-                                    # Handle Excel date (float days since 1900-01-01)
-                                    # Excel dates are days since 1899-12-30 (1 = 1900-01-01)
-                                    delta_days = int(row_date_str)
-                                    base_date = datetime(1899, 12, 30).date()
-                                    row_date = base_date + timedelta(days=delta_days)
-                                else:
-                                    print(f"⚠️ Unknown date format: {type(row_date_str)}", flush=True)
+                                # Try with time component
+                                date_time_obj = datetime.strptime(date_time_val, '%m/%d/%Y %H:%M')
+                            except ValueError:
+                                try:
+                                    # Try just the date part
+                                    date_time_obj = datetime.strptime(date_time_val, '%m/%d/%Y')
+                                except ValueError:
+                                    print(f"⚠️ Could not parse date string: {date_time_val}", flush=True)
                                     continue
-                                    
-                                # Check if the row is from the last week
-                                if row_date >= one_week_ago:
-                                    print(f"✅ Processing row for date: {row_date}", flush=True)
-                                    
-                                    # Create a data point for InfluxDB
+                        elif isinstance(date_time_val, float):
+                            # Handle Excel date (float days since 1900-01-01)
+                            # Get the integer part (days) and fractional part (time)
+                            days = int(date_time_val)
+                            frac_of_day = date_time_val - days
+                            
+                            # Excel dates start from 1900-01-01, with 1 = 1900-01-01
+                            # But there's a leap year bug, so we use 1899-12-30 as base
+                            base_date = datetime(1899, 12, 30)
+                            
+                            # Add days and convert fractional day to hours/minutes
+                            date_time_obj = base_date + timedelta(days=days)
+                            
+                            # Add time component (frac_of_day * 24 hours * 60 minutes * 60 seconds)
+                            seconds = int(frac_of_day * 86400)  # 86400 = 24*60*60
+                            date_time_obj += timedelta(seconds=seconds)
+                        else:
+                            print(f"⚠️ Unknown date format: {type(date_time_val)}", flush=True)
+                            continue
+                        
+                        # Extract just the date part for comparison
+                        entry_date = date_time_obj.date()
+                        
+                        # Check if this entry is from the last week
+                        if entry_date >= one_week_ago:
+                            recent_entries += 1
+                            
+                            # Create a row data dictionary with all fields
+                            row_data = {}
+                            for col_idx in range(sheet.ncols):
+                                if col_idx < len(headers):
+                                    cell_value = sheet.cell_value(row_idx, col_idx)
+                                    header = headers[col_idx]
+                                    row_data[header] = cell_value
+                            
+                            # Add to the appropriate meal group
+                            if meal_val not in meal_data:
+                                meal_data[meal_val] = []
+                            
+                            # Store the row data and the parsed datetime
+                            meal_data[meal_val].append({
+                                'data': row_data,
+                                'datetime': date_time_obj
+                            })
+                    except Exception as row_err:
+                        print(f"⚠️ Error processing row {row_idx}: {row_err}", flush=True)
+                        continue
+                
+                print(f"✅ Found {recent_entries} entries from the last week", flush=True)
+                
+                # Create InfluxDB points for each meal group
+                for meal_name, entries in meal_data.items():
+                    print(f"📊 Processing {len(entries)} entries for meal: {meal_name}", flush=True)
+                    
+                    for entry in entries:
+                        row_data = entry['data']
+                        timestamp = entry['datetime']
+                        
+                        # Create a data point with meal as a tag
+                        point = Point("nutrition_data")
+                        point.tag("meal", meal_name)
+                        
+                        # Add all numeric fields from the row
+                        for key, value in row_data.items():
+                            # Skip the meal field since we're using it as a tag
+                            if key == 'Meal':
+                                continue
+                                
+                            # Skip empty values
+                            if value is None or (isinstance(value, str) and not value.strip()):
+                                continue
+                            
+                            # Clean the field name for InfluxDB (remove commas, units, etc.)
+                            clean_key = re.sub(r',\s*\w+$', '', key).strip()
+                            
+                            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                                # Direct numeric value
+                                point.field(clean_key, float(value))
+                            elif isinstance(value, str):
+                                # Try to extract numeric part if it has units
+                                numeric_match = re.search(r'^([\d\.]+)', value.strip())
+                                if numeric_match:
+                                    try:
+                                        numeric_value = float(numeric_match.group(1))
+                                        point.field(clean_key, numeric_value)
+                                    except (ValueError, TypeError):
+                                        # If conversion fails, add as a tag
+                                        point.tag(clean_key, value)
+                                else:
+                                    # Non-numeric string becomes a tag
+                                    point.tag(clean_key, value)
+                            else:
+                                # Other types become string tags
+                                point.tag(clean_key, str(value))
+                        
+                        # Add food name as a tag for easier querying
+                        if 'Name' in row_data:
+                            point.tag("food_name", str(row_data['Name']))
+                        
+                        # Use the parsed timestamp for the data point
+                        point.time(timestamp, WritePrecision.NS)
+                        data_points.append(point)
+                
+            except Exception as xlrd_err:
+                print(f"⚠️ Error using xlrd to process Excel file: {xlrd_err}", flush=True)
+                
+                # Try pandas as a fallback
+                try:
+                    print("🔄 Trying pandas for Excel processing...", flush=True)
+                    df = pd.read_excel(xls_file_path)
+                    
+                    # Convert 'Date & Time' column to datetime
+                    if 'Date & Time' in df.columns:
+                        df['Date & Time'] = pd.to_datetime(df['Date & Time'], errors='coerce')
+                        
+                        # Filter to only include entries from the last week
+                        one_week_ago_pd = pd.Timestamp(one_week_ago)
+                        recent_df = df[df['Date & Time'] >= one_week_ago_pd]
+                        
+                        print(f"✅ Found {len(recent_df)} entries from the last week using pandas", flush=True)
+                        
+                        # Group by meal
+                        if 'Meal' in df.columns:
+                            meal_groups = recent_df.groupby('Meal')
+                            
+                            for meal_name, meal_group in meal_groups:
+                                print(f"📊 Processing {len(meal_group)} entries for meal: {meal_name}", flush=True)
+                                
+                                for _, row in meal_group.iterrows():
+                                    # Create a data point with meal as a tag
                                     point = Point("nutrition_data")
+                                    point.tag("meal", meal_name)
                                     
-                                    # Add all fields from the row
-                                    for key, value in row_data.items():
-                                        # Skip empty values
-                                        if value is None or (isinstance(value, str) and not value.strip()):
+                                    # Add fields and tags
+                                    for col in row.index:
+                                        value = row[col]
+                                        
+                                        # Skip null values and meal (already used as tag)
+                                        if pd.isna(value) or col == 'Meal':
                                             continue
-                                            
-                                        if isinstance(value, (int, float)):
-                                            point.field(key, value)
+                                        
+                                        # Clean column name
+                                        clean_col = re.sub(r',\s*\w+$', '', col).strip()
+                                        
+                                        # Handle different data types
+                                        if pd.api.types.is_numeric_dtype(type(value)):
+                                            point.field(clean_col, float(value))
                                         else:
-                                            # Try to convert to number if possible
-                                            try:
-                                                # Extract numeric part if it's a string with units
-                                                if isinstance(value, str):
-                                                    numeric_match = re.search(r'([\d,\.]+)', value)
-                                                    if numeric_match:
-                                                        numeric_value = float(numeric_match.group(1).replace(',', ''))
-                                                        point.field(key, numeric_value)
-                                                    else:
-                                                        point.tag(key, value)
+                                            # Try to extract numeric part from strings
+                                            if isinstance(value, str):
+                                                numeric_match = re.search(r'^([\d\.]+)', value.strip())
+                                                if numeric_match:
+                                                    try:
+                                                        numeric_value = float(numeric_match.group(1))
+                                                        point.field(clean_col, numeric_value)
+                                                    except (ValueError, TypeError):
+                                                        point.tag(clean_col, str(value))
                                                 else:
-                                                    point.tag(key, str(value))
-                                            except (ValueError, TypeError):
-                                                # Keep as tag if conversion fails
-                                                point.tag(key, str(value))
+                                                    point.tag(clean_col, str(value))
+                                            else:
+                                                point.tag(clean_col, str(value))
                                     
-                                    # Use the row date for the timestamp
-                                    timestamp = datetime.combine(row_date, datetime.min.time())
-                                    point.time(timestamp, WritePrecision.NS)
+                                    # Add food name as a tag
+                                    if 'Name' in row:
+                                        point.tag("food_name", str(row['Name']))
+                                    
+                                    # Set timestamp
+                                    timestamp = row['Date & Time']
+                                    point.time(timestamp.to_pydatetime(), WritePrecision.NS)
                                     
                                     data_points.append(point)
-                                else:
-                                    print(f"⏭️ Skipping row for date: {row_date} (before {one_week_ago})", flush=True)
-                            except Exception as date_err:
-                                print(f"⚠️ Error processing date: {date_err}", flush=True)
-                                continue
-                    except Exception as row_err:
-                        print(f"⚠️ Error processing row: {row_err}", flush=True)
-                        continue
-            
-            except Exception as xlrd_err:
-                print(f"⚠️ Could not use xlrd to read Excel file: {xlrd_err}", flush=True)
-                print("Trying alternative method...", flush=True)
-                
-                # If xlrd fails, try direct CSV reading for XLS
-                # (this won't work well but is a fallback)
-                try:
-                    with open(xls_file_path, 'r', encoding='latin-1') as f:
-                        reader = csv.reader(f)
-                        rows = list(reader)
-                        
-                        if rows:
-                            headers = rows[0]
-                            for row in rows[1:]:
-                                row_data = {}
-                                for i, value in enumerate(row):
-                                    if i < len(headers):
-                                        row_data[headers[i]] = value
-                                
-                                # Now process the row_data similar to above
-                                # ... (code similar to xlrd processing)
-                                print(f"📊 Processed row with CSV fallback: {row_data}", flush=True)
                         else:
-                            print("⚠️ No data found in the CSV fallback", flush=True)
-                            
-                except Exception as csv_err:
-                    print(f"⚠️ CSV fallback also failed: {csv_err}", flush=True)
-                    raise Exception("Could not parse the Excel file with any available method")
+                            print("⚠️ No 'Meal' column found in pandas dataframe", flush=True)
+                    else:
+                        print("⚠️ No 'Date & Time' column found in pandas dataframe", flush=True)
+                    
+                except Exception as pd_err:
+                    print(f"⚠️ Pandas processing also failed: {pd_err}", flush=True)
+                    raise Exception("Could not process Excel file with any available method")
             
             # Write the data points to InfluxDB
             if data_points:
