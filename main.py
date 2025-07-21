@@ -718,28 +718,32 @@ def run_job():
                                 traceback.print_exc()
             
             # Write the data points to InfluxDB
-            if data_points:
-                print(f"📤 Writing {len(data_points)} data points to InfluxDB", flush=True)
-                
-                try:
-                    with InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG) as client:
-                        write_api = client.write_api()
-                        
-                        # Group points by measurement for better logging
-                        summary_points = [p for p in data_points if p._name == "meal_summary"]
-                        nutrition_points = [p for p in data_points if p._name == "nutrition_data"]
-                        
-                        print(f"   - {len(summary_points)} meal summary points", flush=True)
-                        print(f"   - {len(nutrition_points)} nutrition data points", flush=True)
-                        
-                        # Write all points
-                        write_api.write(bucket=INFLUX_BUCKET, record=data_points)
-                        print("✅ Successfully wrote data to InfluxDB", flush=True)
-                except Exception as influx_err:
-                    print(f"❌ Error writing to InfluxDB: {influx_err}", flush=True)
-                    traceback.print_exc()
-            else:
-                print("⚠️ No data points to write to InfluxDB", flush=True)
+            try:
+                if data_points:
+                    print(f"📤 Writing {len(data_points)} data points to InfluxDB", flush=True)
+                    
+                    try:
+                        with InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG) as client:
+                            write_api = client.write_api()
+                            
+                            # Group points by measurement for better logging
+                            summary_points = [p for p in data_points if p._name == "meal_summary"]
+                            nutrition_points = [p for p in data_points if p._name == "nutrition_data"]
+                            
+                            print(f"   - {len(summary_points)} meal summary points", flush=True)
+                            print(f"   - {len(nutrition_points)} nutrition data points", flush=True)
+                            
+                            # Write all points
+                            write_api.write(bucket=INFLUX_BUCKET, record=data_points)
+                            print("✅ Successfully wrote data to InfluxDB", flush=True)
+                    except Exception as influx_err:
+                        print(f"❌ Error writing to InfluxDB: {influx_err}", flush=True)
+                        traceback.print_exc()
+                else:
+                    print("⚠️ No data points to write to InfluxDB", flush=True)
+            except Exception as e:
+                print(f"❌ Error in data points processing: {e}", flush=True)
+                traceback.print_exc()
             
             # Clean up the Excel file now that we're done with it
             try:

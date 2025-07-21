@@ -3,6 +3,7 @@
 import os
 from influxdb_client import InfluxDBClient
 import sys
+import traceback
 
 # InfluxDB v2 config (set these as environment variables)
 INFLUX_URL = os.getenv("INFLUX_URL")
@@ -59,6 +60,7 @@ def check_measurements():
         
     except Exception as e:
         print(f"❌ Error connecting to InfluxDB: {e}")
+        traceback.print_exc()
         return False
 
 def run_debug_script():
