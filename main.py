@@ -307,15 +307,90 @@ def run_job():
                 
                 print(f"✅ Found {recent_entries} entries from the last week", flush=True)
                 
-                # Create InfluxDB points for each meal group
+                # Create meal summaries and individual data points
                 for meal_name, entries in meal_data.items():
                     print(f"📊 Processing {len(entries)} entries for meal: {meal_name}", flush=True)
                     
+                    # Variables for meal summary
+                    earliest_time = None
+                    meal_date = None
+                    total_calories = 0
+                    total_fat = 0
+                    total_carbs = 0
+                    total_protein = 0
+                    total_sat_fat = 0
+                    total_trans_fat = 0
+                    total_net_carbs = 0
+                    total_fiber = 0
+                    total_sodium = 0
+                    total_calcium = 0
+                    
+                    # Process individual entries
                     for entry in entries:
                         row_data = entry['data']
                         timestamp = entry['datetime']
                         
-                        # Create a data point with meal as a tag
+                        # Track earliest time for this meal
+                        if earliest_time is None or timestamp < earliest_time:
+                            earliest_time = timestamp
+                            meal_date = timestamp.date()
+                        
+                        # Extract nutritional values for summary
+                        try:
+                            # Extract calories
+                            if 'Calories, cals' in row_data:
+                                calories = float(row_data['Calories, cals']) if isinstance(row_data['Calories, cals'], (int, float)) else 0
+                                total_calories += calories
+                            
+                            # Extract total fat
+                            if 'Total Fat, g' in row_data:
+                                fat = float(row_data['Total Fat, g']) if isinstance(row_data['Total Fat, g'], (int, float)) else 0
+                                total_fat += fat
+                            
+                            # Extract carbs
+                            if 'Total Carbs, g' in row_data:
+                                carbs = float(row_data['Total Carbs, g']) if isinstance(row_data['Total Carbs, g'], (int, float)) else 0
+                                total_carbs += carbs
+                            
+                            # Extract protein
+                            if 'Protein, g' in row_data:
+                                protein = float(row_data['Protein, g']) if isinstance(row_data['Protein, g'], (int, float)) else 0
+                                total_protein += protein
+                            
+                            # Extract saturated fat
+                            if 'Saturated Fat, g' in row_data:
+                                sat_fat = float(row_data['Saturated Fat, g']) if isinstance(row_data['Saturated Fat, g'], (int, float)) else 0
+                                total_sat_fat += sat_fat
+                            
+                            # Extract trans fat
+                            if 'Trans Fat, g' in row_data:
+                                trans_fat = float(row_data['Trans Fat, g']) if isinstance(row_data['Trans Fat, g'], (int, float)) else 0
+                                total_trans_fat += trans_fat
+                            
+                            # Extract net carbs
+                            if 'Net Carbs, g' in row_data:
+                                net_carbs = float(row_data['Net Carbs, g']) if isinstance(row_data['Net Carbs, g'], (int, float)) else 0
+                                total_net_carbs += net_carbs
+                            
+                            # Extract fiber
+                            if 'Dietary Fiber, g' in row_data:
+                                fiber = float(row_data['Dietary Fiber, g']) if isinstance(row_data['Dietary Fiber, g'], (int, float)) else 0
+                                total_fiber += fiber
+                            
+                            # Extract sodium
+                            if 'Sodium, mg' in row_data:
+                                sodium = float(row_data['Sodium, mg']) if isinstance(row_data['Sodium, mg'], (int, float)) else 0
+                                total_sodium += sodium
+                            
+                            # Extract calcium
+                            if 'Calcium, mg' in row_data:
+                                calcium = float(row_data['Calcium, mg']) if isinstance(row_data['Calcium, mg'], (int, float)) else 0
+                                total_calcium += calcium
+                        
+                        except Exception as sum_err:
+                            print(f"⚠️ Error calculating nutrition summary: {sum_err}", flush=True)
+                        
+                        # Create a data point with meal as a tag for individual food item
                         point = Point("nutrition_data")
                         point.tag("meal", meal_name)
                         
@@ -360,6 +435,31 @@ def run_job():
                         point.time(timestamp, WritePrecision.NS)
                         data_points.append(point)
                 
+                    # Create a summary point for the entire meal
+                    if earliest_time and len(entries) > 0:
+                        print(f"📊 Creating meal summary for {meal_name} on {meal_date}", flush=True)
+                        
+                        summary_point = Point("meal_summary")
+                        summary_point.tag("meal", meal_name)
+                        summary_point.tag("date", meal_date.isoformat())
+                        summary_point.field("food_count", len(entries))
+                        summary_point.field("calories", total_calories)
+                        summary_point.field("total_fat", total_fat)
+                        summary_point.field("total_carbs", total_carbs)
+                        summary_point.field("protein", total_protein)
+                        summary_point.field("saturated_fat", total_sat_fat)
+                        summary_point.field("trans_fat", total_trans_fat)
+                        summary_point.field("net_carbs", total_net_carbs)
+                        summary_point.field("fiber", total_fiber)
+                        summary_point.field("sodium", total_sodium)
+                        summary_point.field("calcium", total_calcium)
+                        
+                        # Use the earliest timestamp for the meal
+                        summary_point.time(earliest_time, WritePrecision.NS)
+                        data_points.append(summary_point)
+                        
+                        print(f"✅ Meal summary: {meal_name}, {total_calories:.1f} cal, {total_protein:.1f}g protein", flush=True)
+                
             except Exception as xlrd_err:
                 print(f"⚠️ Error using xlrd to process Excel file: {xlrd_err}", flush=True)
                 
@@ -385,8 +485,74 @@ def run_job():
                             for meal_name, meal_group in meal_groups:
                                 print(f"📊 Processing {len(meal_group)} entries for meal: {meal_name}", flush=True)
                                 
+                                # Variables for meal summary
+                                earliest_time = None
+                                meal_date = None
+                                total_calories = 0
+                                total_fat = 0
+                                total_carbs = 0
+                                total_protein = 0
+                                total_sat_fat = 0
+                                total_trans_fat = 0
+                                total_net_carbs = 0
+                                total_fiber = 0
+                                total_sodium = 0
+                                total_calcium = 0
+                                
+                                # Process individual entries
                                 for _, row in meal_group.iterrows():
-                                    # Create a data point with meal as a tag
+                                    # Track earliest time
+                                    row_time = row['Date & Time']
+                                    if earliest_time is None or row_time < earliest_time:
+                                        earliest_time = row_time
+                                        meal_date = row_time.date()
+                                    
+                                    # Extract nutritional values for summary
+                                    try:
+                                        # Calories
+                                        if 'Calories, cals' in row and not pd.isna(row['Calories, cals']):
+                                            total_calories += float(row['Calories, cals'])
+                                        
+                                        # Total Fat
+                                        if 'Total Fat, g' in row and not pd.isna(row['Total Fat, g']):
+                                            total_fat += float(row['Total Fat, g'])
+                                        
+                                        # Carbs
+                                        if 'Total Carbs, g' in row and not pd.isna(row['Total Carbs, g']):
+                                            total_carbs += float(row['Total Carbs, g'])
+                                        
+                                        # Protein
+                                        if 'Protein, g' in row and not pd.isna(row['Protein, g']):
+                                            total_protein += float(row['Protein, g'])
+                                        
+                                        # Saturated Fat
+                                        if 'Saturated Fat, g' in row and not pd.isna(row['Saturated Fat, g']):
+                                            total_sat_fat += float(row['Saturated Fat, g'])
+                                        
+                                        # Trans Fat
+                                        if 'Trans Fat, g' in row and not pd.isna(row['Trans Fat, g']):
+                                            total_trans_fat += float(row['Trans Fat, g'])
+                                        
+                                        # Net Carbs
+                                        if 'Net Carbs, g' in row and not pd.isna(row['Net Carbs, g']):
+                                            total_net_carbs += float(row['Net Carbs, g'])
+                                        
+                                        # Fiber
+                                        if 'Dietary Fiber, g' in row and not pd.isna(row['Dietary Fiber, g']):
+                                            total_fiber += float(row['Dietary Fiber, g'])
+                                        
+                                        # Sodium
+                                        if 'Sodium, mg' in row and not pd.isna(row['Sodium, mg']):
+                                            total_sodium += float(row['Sodium, mg'])
+                                        
+                                        # Calcium
+                                        if 'Calcium, mg' in row and not pd.isna(row['Calcium, mg']):
+                                            total_calcium += float(row['Calcium, mg'])
+                                    
+                                    except Exception as sum_err:
+                                        print(f"⚠️ Error calculating nutrition summary: {sum_err}", flush=True)
+                                    
+                                    # Create individual data point
                                     point = Point("nutrition_data")
                                     point.tag("meal", meal_name)
                                     
@@ -428,6 +594,31 @@ def run_job():
                                     point.time(timestamp.to_pydatetime(), WritePrecision.NS)
                                     
                                     data_points.append(point)
+                            
+                            # Create a summary point for the entire meal
+                            if earliest_time and len(meal_group) > 0:
+                                print(f"📊 Creating meal summary for {meal_name} on {meal_date}", flush=True)
+                                
+                                summary_point = Point("meal_summary")
+                                summary_point.tag("meal", meal_name)
+                                summary_point.tag("date", meal_date.isoformat())
+                                summary_point.field("food_count", len(meal_group))
+                                summary_point.field("calories", total_calories)
+                                summary_point.field("total_fat", total_fat)
+                                summary_point.field("total_carbs", total_carbs)
+                                summary_point.field("protein", total_protein)
+                                summary_point.field("saturated_fat", total_sat_fat)
+                                summary_point.field("trans_fat", total_trans_fat)
+                                summary_point.field("net_carbs", total_net_carbs)
+                                summary_point.field("fiber", total_fiber)
+                                summary_point.field("sodium", total_sodium)
+                                summary_point.field("calcium", total_calcium)
+                                
+                                # Use the earliest timestamp for the meal
+                                summary_point.time(earliest_time.to_pydatetime(), WritePrecision.NS)
+                                data_points.append(summary_point)
+                                
+                                print(f"✅ Meal summary: {meal_name}, {total_calories:.1f} cal, {total_protein:.1f}g protein", flush=True)
                         else:
                             print("⚠️ No 'Meal' column found in pandas dataframe", flush=True)
                     else:
