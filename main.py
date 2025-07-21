@@ -291,12 +291,13 @@ def run_job():
                                     header = headers[col_idx]
                                     row_data[header] = cell_value
                             
-                            # Add to the appropriate meal group
-                            if meal_val not in meal_data:
-                                meal_data[meal_val] = []
+                            # Add to the appropriate meal group, keyed by (date, meal)
+                            meal_group_key = (entry_date, meal_val)
+                            if meal_group_key not in meal_data:
+                                meal_data[meal_group_key] = []
                             
                             # Store the row data and the parsed datetime
-                            meal_data[meal_val].append({
+                            meal_data[meal_group_key].append({
                                 'data': row_data,
                                 'datetime': date_time_obj
                             })
@@ -307,12 +308,12 @@ def run_job():
                 print(f"✅ Found {recent_entries} entries from the last week", flush=True)
                 
                 # Create meal summaries and individual data points
-                for meal_name, entries in meal_data.items():
-                    print(f"📊 Processing {len(entries)} entries for meal: {meal_name}", flush=True)
+                for (meal_date_obj, meal_name), entries in meal_data.items():
+                    print(f"📊 Processing {len(entries)} entries for meal: {meal_name} on {meal_date_obj}", flush=True)
                     
                     # Variables for meal summary
                     earliest_time = None
-                    meal_date = None
+                    meal_date = meal_date_obj
                     total_calories = 0
                     total_fat = 0
                     total_carbs = 0
@@ -543,14 +544,16 @@ def run_job():
                         
                         # Group by meal
                         if 'Meal' in df.columns:
-                            meal_groups = recent_df.groupby('Meal')
+                            # Group by both date and meal for daily meal summaries
+                            recent_df['entry_date'] = recent_df['Date & Time'].dt.date
+                            meal_groups = recent_df.groupby(['entry_date', 'Meal'])
                             
-                            for meal_name, meal_group in meal_groups:
-                                print(f"📊 Processing {len(meal_group)} entries for meal: {meal_name}", flush=True)
+                            for (entry_date, meal_name), meal_group in meal_groups:
+                                print(f"📊 Processing {len(meal_group)} entries for meal: {meal_name} on {entry_date}", flush=True)
                                 
                                 # Variables for meal summary
                                 earliest_time = None
-                                meal_date = None
+                                meal_date = entry_date
                                 total_calories = 0
                                 total_fat = 0
                                 total_carbs = 0
@@ -605,7 +608,7 @@ def run_job():
                                             total_fiber += float(row['Dietary Fiber, g'])
                                         
                                         # Sodium
-                                        if 'Sodium, mg' in row and not pd.isna(row['Sodium, mg']):
+                                        if 'Sodium, mg' in row and not pd.isna row['Sodium, mg']:
                                             total_sodium += float(row['Sodium, mg'])
                                         
                                         # Calcium
