@@ -597,7 +597,7 @@ def run_job():
                                             total_sat_fat += float(row['Saturated Fat, g'])
                                         
                                         # Trans Fat
-                                        if 'Trans Fat, g' in row and not pd.isna row['Trans Fat, g']:
+                                        if 'Trans Fat, g' in row and not pd.isna(row['Trans Fat, g']):
                                             total_trans_fat += float(row['Trans Fat, g'])
                                         
                                         # Net Carbs
