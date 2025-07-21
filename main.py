@@ -196,19 +196,18 @@ def run_job():
             print(f"🖼 Export error screenshot: {export_error_screenshot}", flush=True)
             raise Exception("Failed to download Excel file")
         
-        # Process the Excel file using built-in modules instead of pandas
+        # Process the Excel file and write to InfluxDB
         print("📊 Processing Excel file...", flush=True)
         
         try:
-            # Get the date from one week ago
+            # This single try block will now encompass all data processing and writing.
             one_week_ago = datetime.now().date() - timedelta(days=7)
             data_points = []
             
-            # Process the XLS file
-            import xlrd  # Try to use xlrd if available
-            
+            # Process the XLS file using xlrd
             try:
-                # Try xlrd first
+                import xlrd
+                print("🔄 Trying to process with xlrd...", flush=True)
                 workbook = xlrd.open_workbook(xls_file_path)
                 sheet = workbook.sheet_by_index(0)
                 
@@ -741,24 +740,18 @@ def run_job():
             else:
                 print("⚠️ No data points to write to InfluxDB", flush=True)
             
-            # Clean up the Excel file now that we're done with it
-            try:
-                os.remove(xls_file_path)
-                print(f"🗑️ Deleted Excel file: {xls_file_path}", flush=True)
-            except Exception as del_err:
-                print(f"⚠️ Could not delete Excel file: {del_err}", flush=True)
-                
-        except Exception as excel_err:
-            print(f"❌ Error processing Excel file: {excel_err}", flush=True)
+        except Exception as processing_err:
+            print(f"❌ A critical error occurred during file processing or InfluxDB writing: {processing_err}", flush=True)
             traceback.print_exc()
             
-            # Try to clean up the Excel file even if processing failed
-            try:
-                if xls_file_path and os.path.exists(xls_file_path):
+        finally:
+            # This 'finally' block ensures the downloaded file is always cleaned up.
+            if xls_file_path and os.path.exists(xls_file_path):
+                try:
                     os.remove(xls_file_path)
-                    print(f"🗑️ Deleted Excel file after error: {xls_file_path}", flush=True)
-            except Exception as del_err:
-                print(f"⚠️ Could not delete Excel file after error: {del_err}", flush=True)
+                    print(f"🗑️ Deleted Excel file: {xls_file_path}", flush=True)
+                except Exception as del_err:
+                    print(f"⚠️ Could not delete Excel file: {del_err}", flush=True)
 
     except Exception as e:
         error_time = datetime.now().strftime("%Y%m%d-%H%M%S")
