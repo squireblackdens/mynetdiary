@@ -14,6 +14,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 import pandas as pd
 
+
 # InfluxDB v2 config (set these as environment variables)
 INFLUX_URL = os.getenv("INFLUX_URL")
 INFLUX_TOKEN = os.getenv("INFLUX_TOKEN")
