@@ -1,5 +1,4 @@
 selenium
 schedule
 influxdb-client
-pandas
-openpyxl
+xlrd
