@@ -14,7 +14,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 import pandas as pd
 
-
 # InfluxDB v2 config (set these as environment variables)
 INFLUX_URL = os.getenv("INFLUX_URL")
 INFLUX_TOKEN = os.getenv("INFLUX_TOKEN")
@@ -716,9 +715,6 @@ def run_job():
                             except Exception as summary_err:
                                 print(f"❌ Error creating meal summary: {summary_err}", flush=True)
                                 traceback.print_exc()
-                except Exception as pandas_err:
-                    print(f"❌ Error using pandas to process Excel file: {pandas_err}", flush=True)
-                    traceback.print_exc()
             
             # Write the data points to InfluxDB - this must be outside of any incomplete try blocks
             if data_points:
