@@ -840,7 +840,8 @@ print("🚀 Starting MyNetDiary data collector", flush=True)
 run_job()
 
 # Schedule to run weekly on Sunday at 2am
-schedule.every().sunday.at("02:00").do(run_job)
+# schedule.every().sunday.at("02:00").do(run_job)
+schedule.daily.at("02:00").do(run_job)  
 print("⏰ Scheduled to run weekly on Sunday at 02:00", flush=True)
 
 # Add a short delay before entering the main loop
