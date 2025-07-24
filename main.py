@@ -13,6 +13,7 @@ from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 import pandas as pd
+import pytz
 
 # InfluxDB v2 config (set these as environment variables)
 INFLUX_URL = os.getenv("INFLUX_URL")
@@ -26,6 +27,9 @@ PASSWORD = os.getenv("MND_PASSWORD")
 
 def run_job():
     print(f"🕑 Job started at {datetime.now()}", flush=True)
+
+    # Define the timezone
+    paris_tz = pytz.timezone('Europe/Paris')
 
     # Create a unique temporary directory for Chrome user data
     import tempfile
@@ -244,18 +248,18 @@ def run_job():
                         meal_val = sheet.cell_value(row_idx, meal_idx)
                         
                         # Parse the date/time
+                        date_time_obj_naive = None
                         if isinstance(date_time_val, str):
-                            # Try different date formats (MyNetDiary format is typically MM/DD/YYYY hh:mm)
-                            try:
-                                # Try with time component
-                                date_time_obj = datetime.strptime(date_time_val, '%m/%d/%Y %H:%M')
-                            except ValueError:
+                            # Try different date formats
+                            for fmt in ('%d/%m/%Y %H:%M', '%d %m %Y %H:%M', '%m/%d/%Y %H:%M', '%d/%m/%Y', '%m/%d/%Y'):
                                 try:
-                                    # Try just the date part
-                                    date_time_obj = datetime.strptime(date_time_val, '%m/%d/%Y')
+                                    date_time_obj_naive = datetime.strptime(date_time_val, fmt)
+                                    break
                                 except ValueError:
-                                    print(f"⚠️ Could not parse date string: {date_time_val}", flush=True)
                                     continue
+                            if not date_time_obj_naive:
+                                print(f"⚠️ Could not parse date string: {date_time_val}", flush=True)
+                                continue
                         elif isinstance(date_time_val, float):
                             # Handle Excel date (float days since 1900-01-01)
                             # Get the integer part (days) and fractional part (time)
@@ -267,14 +271,17 @@ def run_job():
                             base_date = datetime(1899, 12, 30)
                             
                             # Add days and convert fractional day to hours/minutes
-                            date_time_obj = base_date + timedelta(days=days)
+                            date_time_obj_naive = base_date + timedelta(days=days)
                             
                             # Add time component (frac_of_day * 24 hours * 60 minutes * 60 seconds)
                             seconds = int(frac_of_day * 86400)  # 86400 = 24*60*60
-                            date_time_obj += timedelta(seconds=seconds)
+                            date_time_obj_naive += timedelta(seconds=seconds)
                         else:
                             print(f"⚠️ Unknown date format: {type(date_time_val)}", flush=True)
                             continue
+
+                        # Localize the naive datetime object to Paris timezone
+                        date_time_obj = paris_tz.localize(date_time_obj_naive)
                         
                         # Extract just the date part for comparison
                         entry_date = date_time_obj.date()
@@ -535,10 +542,13 @@ def run_job():
                     
                     # Convert 'Date & Time' column to datetime
                     if 'Date & Time' in df.columns:
-                        df['Date & Time'] = pd.to_datetime(df['Date & Time'], errors='coerce')
+                        df['Date & Time'] = pd.to_datetime(df['Date & Time'], errors='coerce', dayfirst=True)
                         
+                        # Localize to Paris timezone
+                        df['Date & Time'] = df['Date & Time'].dt.tz_localize(paris_tz)
+
                         # Filter to only include entries from the last week
-                        one_week_ago_pd = pd.Timestamp(one_week_ago)
+                        one_week_ago_pd = pd.Timestamp(one_week_ago, tz=paris_tz)
                         recent_df = df[df['Date & Time'] >= one_week_ago_pd]
                         
                         print(f"✅ Found {len(recent_df)} entries from the last week using pandas", flush=True)
@@ -605,7 +615,7 @@ def run_job():
                                             total_net_carbs += float(row['Net Carbs, g'])
                                         
                                         # Fiber
-                                        if 'Dietary Fiber, g' in row and not pd.isna(row['Dietary Fiber, g']):
+                                        if 'Dietary Fiber, g' in row and not pd.isna row['Dietary Fiber, g']):
                                             total_fiber += float(row['Dietary Fiber, g'])
                                         
                                         # Sodium
@@ -839,7 +849,7 @@ def check_influxdb_data():
 print("🚀 Starting MyNetDiary data collector", flush=True)
 run_job()
 
-# Schedule to run weekly on Sunday at 2am
+
 # schedule.every().sunday.at("02:00").do(run_job)
 schedule.every().day.at("02:00").do(run_job)
 print("⏰ Scheduled to run daily at 02:00", flush=True)

@@ -1,0 +1,6 @@
+influx delete \
+  --bucket netdiary \
+  --org beausite \
+  --start 1970-01-01T00:00:00Z \
+  --stop $(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+  --token xFxdcI7Kv9U_7RikTWm3A_cC8w7SlthjJzCzDq97tRcnrpMq6EnC7pifVl3jXJQCv8X7BZJQNPe4p6oOZgABwQ==
