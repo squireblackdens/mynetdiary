@@ -437,6 +437,10 @@ def run_job():
                             # Skip the meal field since we're using it as a tag
                             if key == 'Meal':
                                 continue
+                            
+                            # Skip the Date & Time field since we use it for the point's timestamp
+                            if key == 'Date & Time':
+                                continue
                                 
                             # Skip empty values
                             if value is None or (isinstance(value, str) and not value.strip()):
@@ -607,7 +611,7 @@ def run_job():
                                             total_sat_fat += float(row['Saturated Fat, g'])
                                         
                                         # Trans Fat
-                                        if 'Trans Fat, g' in row and not pd.isna(row['Trans Fat, g']):
+                                        if 'Trans Fat, g' in row and not pd.isna row['Trans Fat, g']:
                                             total_trans_fat += float(row['Trans Fat, g'])
                                         
                                         # Net Carbs
@@ -639,6 +643,10 @@ def run_job():
                                         
                                         # Skip null values and meal (already used as tag)
                                         if pd.isna(value) or col == 'Meal':
+                                            continue
+                                        
+                                        # Skip the Date & Time field since we use it for the point's timestamp
+                                        if col == 'Date & Time':
                                             continue
                                         
                                         # Clean column name
