@@ -582,7 +582,7 @@ def run_job():
                                 
                                 # Process individual entries
                                 for _, row in meal_group.iterrows():
-                                    # Track earliest time
+                                    # Track earliest time 
                                     row_time = row['Date & Time']
                                     if earliest_time is None or row_time < earliest_time:
                                         earliest_time = row_time
@@ -611,7 +611,7 @@ def run_job():
                                             total_sat_fat += float(row['Saturated Fat, g'])
                                         
                                         # Trans Fat
-                                        if 'Trans Fat, g' in row and not pd.isna(row['Trans Fat, g']):
+                                        if 'Trans Fat, g' in row and not pd.isna row['Trans Fat, g']:
                                             total_trans_fat += float(row['Trans Fat, g'])
                                         
                                         # Net Carbs
@@ -744,28 +744,23 @@ def run_job():
             
             # Write the data points to InfluxDB - this must be outside of any incomplete try blocks
             if data_points:
-                print(f"📤 Writing {len(data_points)} data points to InfluxDB", flush=True)
+                print(f"📤 Writing {len(data_points)} data points to InfluxDB")
+                print(f"   - {len(meal_summaries)} meal summary points")
+                print(f"   - {len(nutrition_data)} nutrition data points")
+                
+                client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
+                write_api = client.write_api(write_options=SYNCHRONOUS)
                 
                 try:
-                    with InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG) as client:
-                        write_api = client.write_api()
-                        
-                        # Group points by measurement for better logging
-                        summary_points = [p for p in data_points if p._name == "meal_summary"]
-                        nutrition_points = [p for p in data_points if p._name == "nutrition_data"]
-                        
-                        print(f"   - {len(summary_points)} meal summary points", flush=True)
-                        print(f"   - {len(nutrition_points)} nutrition data points", flush=True)
-                        
-                        # Write all points
-                        write_api.write(bucket=INFLUX_BUCKET, record=data_points)
-                        print("✅ Successfully wrote data to InfluxDB", flush=True)
-                except Exception as influx_err:
-                    print(f"❌ Error writing to InfluxDB: {influx_err}", flush=True)
-                    traceback.print_exc()
+                    write_api.write(bucket=INFLUXDB_BUCKET, org=INFLUXDB_ORG, record=data_points)
+                    print("✅ Successfully wrote data to InfluxDB")
+                except Exception as e:
+                    print(f"❌ Failed to write to InfluxDB: {e}")
+                finally:
+                    client.close() # Ensure client is closed and data is flushed
             else:
-                print("⚠️ No data points to write to InfluxDB", flush=True)
-            
+                print("No new data to write to InfluxDB.")
+
         except Exception as processing_err:
             print(f"❌ A critical error occurred during file processing or InfluxDB writing: {processing_err}", flush=True)
             traceback.print_exc()
