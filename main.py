@@ -473,7 +473,7 @@ def run_job():
                     if meal_name != "Snacks":
                         try:
                             if earliest_time and len(entries) > 0:
-                                log(f"📊 Creating meal summary for {meal_name} on {meal_date}")
+                                log(f"📊 Creating meal summary for {meal_name} on {meal_date} at {earliest_time.strftime('%H:%M')}")
                                 
                                 # Create a separate summary point
                                 summary_point = Point("meal_summary")
@@ -676,7 +676,7 @@ def run_job():
                             if meal_name != "Snacks":
                                 try:
                                     if earliest_time and len(meal_group) > 0:
-                                        log(f"📊 Creating meal summary for {meal_name} on {meal_date}")
+                                        log(f"📊 Creating meal summary for {meal_name} on {meal_date} at {earliest_time.strftime('%H:%M')}")
                                         
                                         # Create a separate summary point
                                         summary_point = Point("meal_summary")
