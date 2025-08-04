@@ -25,8 +25,13 @@ INFLUX_BUCKET = os.getenv("INFLUX_BUCKET")
 EMAIL = os.getenv("MND_EMAIL")
 PASSWORD = os.getenv("MND_PASSWORD")
 
+# --- Helper for logging with timestamps ---
+def log(message):
+    """Prints a message with a timestamp."""
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}", flush=True)
+
 def run_job():
-    print(f"🕑 Job started at {datetime.now()}", flush=True)
+    log(f"🚀 Job started")
 
     # Define the timezone
     paris_tz = pytz.timezone('Europe/Paris')
@@ -34,7 +39,7 @@ def run_job():
     # Create a unique temporary directory for Chrome user data
     import tempfile
     temp_dir = tempfile.mkdtemp(prefix="chrome_user_data_")
-    print(f"📁 Created temporary directory: {temp_dir}", flush=True)
+    log(f"📁 Created temporary directory: {temp_dir}")
     
     chrome_options = Options()
     # Re-enable headless mode as this is likely running in a container
@@ -64,17 +69,17 @@ def run_job():
     driver = None
     
     try:
-        print("🌐 Initializing Chrome WebDriver", flush=True)
+        log("🌐 Initializing Chrome WebDriver")
         driver = webdriver.Chrome(options=chrome_options)
         
         # --- LOGIN ---
-        print("🌐 Navigating to login page", flush=True)
+        log("🌐 Navigating to login page")
         driver.get("https://www.mynetdiary.com/logonPage.do")
         
         # Add a screenshot of the login page for debugging
         login_screenshot = f"/app/downloads/login_page_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
         driver.save_screenshot(login_screenshot)
-        print(f"🖼 Login page screenshot: {login_screenshot}", flush=True)
+        log(f"🖼 Login page screenshot: {login_screenshot}")
 
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "username-or-email")))
         
@@ -88,9 +93,9 @@ def run_job():
         
         # Type the credentials
         username_field.send_keys(EMAIL)
-        print(f"✓ Entered email: {EMAIL[:3]}...{EMAIL[-3:]}", flush=True)
+        log(f"✓ Entered email: {EMAIL[:3]}...{EMAIL[-3:]}")
         password_field.send_keys(PASSWORD)
-        print("✓ Entered password", flush=True)
+        log("✓ Entered password")
         
         # Optional: Check the "Remember me" checkbox
         try:
@@ -99,18 +104,18 @@ def run_job():
                 # Click the parent span since the checkbox might be hidden
                 remember_me_label = driver.find_element(By.XPATH, "//span[contains(@class, 'MuiTypography-body1') and text()='Remember me on this computer']")
                 remember_me_label.click()
-                print("✓ Selected 'Remember me' checkbox", flush=True)
+                log("✓ Selected 'Remember me' checkbox")
         except Exception as e:
-            print(f"ℹ️ Could not select 'Remember me' checkbox: {str(e)}", flush=True)
+            log(f"ℹ️ Could not select 'Remember me' checkbox: {str(e)}")
         
         # Take screenshot before submitting
         pre_submit_screenshot = f"/app/downloads/pre_submit_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
         driver.save_screenshot(pre_submit_screenshot)
-        print(f"🖼 Pre-submit screenshot: {pre_submit_screenshot}", flush=True)
+        log(f"🖼 Pre-submit screenshot: {pre_submit_screenshot}")
         
         # Click the sign-in button using JavaScript for more reliability
         try:
-            print("🔐 Submitting form with JavaScript", flush=True)
+            log("🔐 Submitting form with JavaScript")
             driver.execute_script("""
                 var buttons = document.querySelectorAll('button');
                 for(var i=0; i<buttons.length; i++) {
@@ -123,31 +128,31 @@ def run_job():
             """)
             time.sleep(5)  # Give more time for the form to submit and process
         except Exception as e:
-            print(f"⚠️ JavaScript form submission failed: {str(e)}", flush=True)
+            log(f"⚠️ JavaScript form submission failed: {str(e)}")
             
-        print("🔐 Submitted login form", flush=True)
+        log("🔐 Submitted login form")
 
         # Take screenshot after submit
         post_submit_screenshot = f"/app/downloads/post_submit_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
         driver.save_screenshot(post_submit_screenshot)
-        print(f"🖼 Post-submit screenshot: {post_submit_screenshot}", flush=True)
+        log(f"🖼 Post-submit screenshot: {post_submit_screenshot}")
 
         # Print current URL for debugging
-        print(f"🌐 Current URL after login submit: {driver.current_url}", flush=True)
+        log(f"🌐 Current URL after login submit: {driver.current_url}")
 
         # Navigate directly to XLS export URL
-        print("🔍 Navigating to XLS download URL", flush=True)
+        log("🔍 Navigating to XLS download URL")
         driver.get("https://www.mynetdiary.com/exportData.do?year=2025")
         time.sleep(5)  # Wait for download to start
         
         # Take a screenshot after navigation to download URL
         direct_nav_screenshot = f"/app/downloads/direct_nav_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
         driver.save_screenshot(direct_nav_screenshot)
-        print(f"🖼 Screenshot after navigation to download URL: {direct_nav_screenshot}", flush=True)
+        log(f"🖼 Screenshot after navigation to download URL: {direct_nav_screenshot}")
         
         # Check if we need to login again
         if "logonPage.do" in driver.current_url or "signin" in driver.current_url.lower():
-            print("⚠️ Redirected to login page, need to log in again", flush=True)
+            log("⚠️ Redirected to login page, need to log in again")
             
             WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "username-or-email")))
             username_field = driver.find_element(By.ID, "username-or-email")
@@ -160,12 +165,12 @@ def run_job():
             # Use the explicit button click for the retry
             signin_button = driver.find_element(By.XPATH, "//button[.//span[text()='SIGN IN']]")
             driver.execute_script("arguments[0].click();", signin_button)
-            print("🔐 Retried login submission", flush=True)
+            log("🔐 Retried login submission")
             time.sleep(5)
             
             retry_screenshot = f"/app/downloads/retry_login_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
             driver.save_screenshot(retry_screenshot)
-            print(f"🖼 Screenshot after retry: {retry_screenshot}", flush=True)
+            log(f"🖼 Screenshot after retry: {retry_screenshot}")
             
             # Try direct navigation to download URL again
             driver.get("https://www.mynetdiary.com/exportData.do?year=2025")
@@ -173,10 +178,10 @@ def run_job():
             
             retry_download_screenshot = f"/app/downloads/retry_download_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
             driver.save_screenshot(retry_download_screenshot)
-            print(f"🖼 Screenshot after retry to download URL: {retry_download_screenshot}", flush=True)
+            log(f"🖼 Screenshot after retry to download URL: {retry_download_screenshot}")
 
         # Wait for the download to complete
-        print("⏳ Waiting for Excel file to download...", flush=True)
+        log("⏳ Waiting for Excel file to download...")
         
         # Wait up to 30 seconds for a file to appear in the download directory
         max_wait = 30
@@ -188,20 +193,20 @@ def run_job():
             xls_files = list(Path(temp_dir).glob("*.xls"))
             if xls_files:
                 xls_file_path = str(xls_files[0])
-                print(f"📄 Found downloaded file: {xls_file_path}", flush=True)
+                log(f"📄 Found downloaded file: {xls_file_path}")
                 break
             time.sleep(1)
             wait_time += 1
         
         if not xls_file_path:
-            print("⚠️ No Excel file was downloaded. Taking screenshot for debugging.", flush=True)
+            log("⚠️ No Excel file was downloaded. Taking screenshot for debugging.")
             export_error_screenshot = f"/app/downloads/export_error_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
             driver.save_screenshot(export_error_screenshot)
-            print(f"🖼 Export error screenshot: {export_error_screenshot}", flush=True)
+            log(f"🖼 Export error screenshot: {export_error_screenshot}")
             raise Exception("Failed to download Excel file")
         
         # Process the Excel file and write to InfluxDB
-        print("📊 Processing Excel file...", flush=True)
+        log("📊 Processing Excel file...")
         
         try:
             # This single try block will now encompass all data processing and writing.
@@ -211,13 +216,13 @@ def run_job():
             # Process the XLS file using xlrd
             try:
                 import xlrd
-                print("🔄 Trying to process with xlrd...", flush=True)
+                log("🔄 Trying to process with xlrd...")
                 workbook = xlrd.open_workbook(xls_file_path)
                 sheet = workbook.sheet_by_index(0)
                 
                 # Get headers from first row
                 headers = [sheet.cell_value(0, col) for col in range(sheet.ncols)]
-                print(f"📊 Found headers: {headers}", flush=True)
+                log(f"📊 Found headers: {headers}")
                 
                 # Find the index of the 'Date & Time' column
                 date_time_idx = -1
@@ -229,11 +234,11 @@ def run_job():
                         meal_idx = idx
                 
                 if date_time_idx == -1:
-                    print("⚠️ Could not find 'Date & Time' column in the Excel file", flush=True)
+                    log("⚠️ Could not find 'Date & Time' column in the Excel file")
                     raise Exception("Missing 'Date & Time' column")
                 
                 if meal_idx == -1:
-                    print("⚠️ Could not find 'Meal' column in the Excel file", flush=True)
+                    log("⚠️ Could not find 'Meal' column in the Excel file")
                     raise Exception("Missing 'Meal' column")
                 
                 # Group data points by meal type
@@ -258,13 +263,13 @@ def run_job():
                                 except ValueError:
                                     continue
                             if not date_time_obj_naive:
-                                print(f"⚠️ Could not parse date string: {date_time_val}", flush=True)
+                                log(f"⚠️ Could not parse date string: {date_time_val}")
                                 continue
                         elif isinstance(date_time_val, float):
                             # Use xlrd's built-in function to correctly convert Excel date float to datetime
                             date_time_obj_naive = xlrd.xldate_as_datetime(date_time_val, workbook.datemode)
                         else:
-                            print(f"⚠️ Unknown date format: {type(date_time_val)}", flush=True)
+                            log(f"⚠️ Unknown date format: {type(date_time_val)}")
                             continue
 
                         # Localize the naive datetime object to Paris timezone
@@ -296,14 +301,14 @@ def run_job():
                                 'datetime': date_time_obj
                             })
                     except Exception as row_err:
-                        print(f"⚠️ Error processing row {row_idx}: {row_err}", flush=True)
+                        log(f"⚠️ Error processing row {row_idx}: {row_err}")
                         continue
                 
-                print(f"✅ Found {recent_entries} entries from the last week", flush=True)
+                log(f"✅ Found {recent_entries} entries from the last week")
                 
                 # Create meal summaries and individual data points
                 for (meal_date_obj, meal_name), entries in meal_data.items():
-                    print(f"📊 Processing {len(entries)} entries for meal: {meal_name} on {meal_date_obj}", flush=True)
+                    log(f"📊 Processing {len(entries)} entries for meal: {meal_name} on {meal_date_obj}")
                     
                     # Variables for meal summary
                     earliest_time = None
@@ -412,8 +417,8 @@ def run_job():
                             total_calcium += calcium
                         
                         except Exception as sum_err:
-                            print(f"⚠️ Error calculating nutrition summary for item: {sum_err}", flush=True)
-                            print(f"   Row data: {row_data.keys()}", flush=True)
+                            log(f"⚠️ Error calculating nutrition summary for item: {sum_err}")
+                            log(f"   Row data: {row_data.keys()}")
                         
                         # Create a data point with meal as a tag for individual food item
                         point = Point("nutrition_data")
@@ -468,7 +473,7 @@ def run_job():
                     if meal_name != "Snacks":
                         try:
                             if earliest_time and len(entries) > 0:
-                                print(f"📊 Creating meal summary for {meal_name} on {meal_date}", flush=True)
+                                log(f"📊 Creating meal summary for {meal_name} on {meal_date}")
                                 
                                 # Create a separate summary point
                                 summary_point = Point("meal_summary")
@@ -480,19 +485,19 @@ def run_job():
                                 
                                 if total_calories > 0:
                                     summary_point.field("calories", total_calories)
-                                    print(f"   Total calories: {total_calories:.1f}", flush=True)
+                                    log(f"   Total calories: {total_calories:.1f}")
                                     
                                 if total_fat > 0:
                                     summary_point.field("total_fat", total_fat)
-                                    print(f"   Total fat: {total_fat:.1f}g", flush=True)
+                                    log(f"   Total fat: {total_fat:.1f}g")
                                     
                                 if total_carbs > 0:
                                     summary_point.field("total_carbs", total_carbs)
-                                    print(f"   Total carbs: {total_carbs:.1f}g", flush=True)
+                                    log(f"   Total carbs: {total_carbs:.1f}g")
                                     
                                 if total_protein > 0:
                                     summary_point.field("protein", total_protein)
-                                    print(f"   Total protein: {total_protein:.1f}g", flush=True)
+                                    log(f"   Total protein: {total_protein:.1f}g")
                                     
                                 if total_sat_fat > 0:
                                     summary_point.field("saturated_fat", total_sat_fat)
@@ -518,17 +523,17 @@ def run_job():
                                 # Add to the list of points to write
                                 data_points.append(summary_point)
                                 
-                                print(f"✅ Meal summary point created and added to data_points array. Total points: {len(data_points)}", flush=True)
+                                log(f"✅ Meal summary point created and added to data_points array. Total points: {len(data_points)}")
                         except Exception as summary_err:
-                            print(f"❌ Error creating meal summary: {summary_err}", flush=True)
+                            log(f"❌ Error creating meal summary: {summary_err}")
                             traceback.print_exc()
             
             except Exception as xlrd_err:
-                print(f"⚠️ Error using xlrd to process Excel file: {xlrd_err}", flush=True)
+                log(f"⚠️ Error using xlrd to process Excel file: {xlrd_err}")
                 
                 # Try pandas as a fallback
                 try:
-                    print("🔄 Trying pandas for Excel processing...", flush=True)
+                    log("🔄 Trying pandas for Excel processing...")
                     df = pd.read_excel(xls_file_path)
                     
                     # Convert 'Date & Time' column to datetime
@@ -542,7 +547,7 @@ def run_job():
                         one_week_ago_pd = pd.Timestamp(one_week_ago, tz=paris_tz)
                         recent_df = df[df['Date & Time'] >= one_week_ago_pd]
                         
-                        print(f"✅ Found {len(recent_df)} entries from the last week using pandas", flush=True)
+                        log(f"✅ Found {len(recent_df)} entries from the last week using pandas")
                         
                         # Group by meal
                         if 'Meal' in df.columns:
@@ -551,7 +556,7 @@ def run_job():
                             meal_groups = recent_df.groupby(['entry_date', 'Meal'])
                             
                             for (entry_date, meal_name), meal_group in meal_groups:
-                                print(f"📊 Processing {len(meal_group)} entries for meal: {meal_name} on {entry_date}", flush=True)
+                                log(f"📊 Processing {len(meal_group)} entries for meal: {meal_name} on {entry_date}")
                                 
                                 # Variables for meal summary
                                 earliest_time = None
@@ -610,7 +615,7 @@ def run_job():
                                             total_fiber += float(row['Dietary Fiber, g'])
                                         
                                         # Sodium
-                                        if 'Sodium, mg' in row and not pd.isna(row['Sodium, mg']):
+                                        if 'Sodium, mg' in row and not pd.isna row['Sodium, mg']:
                                             total_sodium += float(row['Sodium, mg'])
                                         
                                         # Calcium
@@ -618,7 +623,7 @@ def run_job():
                                             total_calcium += float(row['Calcium, mg'])
                                     
                                     except Exception as sum_err:
-                                        print(f"⚠️ Error calculating nutrition summary: {sum_err}", flush=True)
+                                        log(f"⚠️ Error calculating nutrition summary: {sum_err}")
                                     
                                     # Create individual data point
                                     point = Point("nutrition_data")
@@ -671,7 +676,7 @@ def run_job():
                             if meal_name != "Snacks":
                                 try:
                                     if earliest_time and len(meal_group) > 0:
-                                        print(f"📊 Creating meal summary for {meal_name} on {meal_date}", flush=True)
+                                        log(f"📊 Creating meal summary for {meal_name} on {meal_date}")
                                         
                                         # Create a separate summary point
                                         summary_point = Point("meal_summary")
@@ -683,19 +688,19 @@ def run_job():
                                         
                                         if total_calories > 0:
                                             summary_point.field("calories", total_calories)
-                                            print(f"   Total calories: {total_calories:.1f}", flush=True)
+                                            log(f"   Total calories: {total_calories:.1f}")
                                             
                                         if total_fat > 0:
                                             summary_point.field("total_fat", total_fat)
-                                            print(f"   Total fat: {total_fat:.1f}g", flush=True)
+                                            log(f"   Total fat: {total_fat:.1f}g")
                                             
                                         if total_carbs > 0:
                                             summary_point.field("total_carbs", total_carbs)
-                                            print(f"   Total carbs: {total_carbs:.1f}g", flush=True)
+                                            log(f"   Total carbs: {total_carbs:.1f}g")
                                             
                                         if total_protein > 0:
                                             summary_point.field("protein", total_protein)
-                                            print(f"   Total protein: {total_protein:.1f}g", flush=True)
+                                            log(f"   Total protein: {total_protein:.1f}g")
                                             
                                         if total_sat_fat > 0:
                                             summary_point.field("saturated_fat", total_sat_fat)
@@ -721,35 +726,39 @@ def run_job():
                                         # Add to the list of points to write
                                         data_points.append(summary_point)
                                         
-                                        print(f"✅ Meal summary point created and added to data_points array. Total points: {len(data_points)}", flush=True)
+                                        log(f"✅ Meal summary point created and added to data_points array. Total points: {len(data_points)}")
                                 except Exception as summary_err:
-                                    print(f"❌ Error creating meal summary: {summary_err}", flush=True)
+                                    log(f"❌ Error creating meal summary: {summary_err}")
                                     traceback.print_exc()
                 except Exception as pandas_err:
-                    print(f"❌ Error using pandas to process Excel file: {pandas_err}", flush=True)
+                    log(f"❌ Error using pandas to process Excel file: {pandas_err}")
                     traceback.print_exc()
             
             # Write the data points to InfluxDB - this must be outside of any incomplete try blocks
             if data_points:
-                print(f"📤 Writing {len(data_points)} data points to InfluxDB")
-                print(f"   - {len(meal_summaries)} meal summary points")
-                print(f"   - {len(nutrition_data)} nutrition data points")
+                # Count points by type for logging
+                meal_summary_count = sum(1 for p in data_points if p._name == 'meal_summary')
+                nutrition_data_count = sum(1 for p in data_points if p._name == 'nutrition_data')
+
+                log(f"📤 Writing {len(data_points)} data points to InfluxDB")
+                log(f"   - {meal_summary_count} meal summary points")
+                log(f"   - {nutrition_data_count} nutrition data points")
                 
-                client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
-                write_api = client.write_api(write_options=SYNCHRONOUS)
+                client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
+                write_api = client.write_api()
                 
                 try:
-                    write_api.write(bucket=INFLUXDB_BUCKET, org=INFLUXDB_ORG, record=data_points)
-                    print("✅ Successfully wrote data to InfluxDB")
+                    write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=data_points)
+                    log("✅ Successfully wrote data to InfluxDB")
                 except Exception as e:
-                    print(f"❌ Failed to write to InfluxDB: {e}")
+                    log(f"❌ Failed to write to InfluxDB: {e}")
                 finally:
                     client.close() # Ensure client is closed and data is flushed
             else:
-                print("No new data to write to InfluxDB.")
+                log("No new data to write to InfluxDB.")
 
         except Exception as processing_err:
-            print(f"❌ A critical error occurred during file processing or InfluxDB writing: {processing_err}", flush=True)
+            log(f"❌ A critical error occurred during file processing or InfluxDB writing: {processing_err}")
             traceback.print_exc()
             
         finally:
@@ -757,9 +766,9 @@ def run_job():
             if xls_file_path and os.path.exists(xls_file_path):
                 try:
                     os.remove(xls_file_path)
-                    print(f"🗑️ Deleted Excel file: {xls_file_path}", flush=True)
+                    log(f"🗑️ Deleted Excel file: {xls_file_path}")
                 except Exception as del_err:
-                    print(f"⚠️ Could not delete Excel file: {del_err}", flush=True)
+                    log(f"⚠️ Could not delete Excel file: {del_err}")
 
     except Exception as e:
         error_time = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -771,12 +780,12 @@ def run_job():
                 driver.save_screenshot(screenshot)
                 with open(html_dump, "w", encoding="utf-8") as f:
                     f.write(driver.page_source)
-                print(f"🖼 Screenshot saved: {screenshot}", flush=True)
-                print(f"📝 HTML saved: {html_dump}", flush=True)
+                log(f"🖼 Screenshot saved: {screenshot}")
+                log(f"📝 HTML saved: {html_dump}")
         except Exception as dump_err:
-            print(f"⚠️ Could not save debug info: {dump_err}", flush=True)
+            log(f"⚠️ Could not save debug info: {dump_err}")
 
-        print("❌ ERROR: Exception occurred during job run", flush=True)
+        log("❌ ERROR: Exception occurred during job run")
         traceback.print_exc()
 
     finally:
@@ -788,16 +797,16 @@ def run_job():
         try:
             import shutil
             shutil.rmtree(temp_dir, ignore_errors=True)
-            print(f"🧹 Cleaned up temporary directory: {temp_dir}", flush=True)
+            log(f"🧹 Cleaned up temporary directory: {temp_dir}")
         except Exception as cleanup_err:
-            print(f"⚠️ Could not clean up temporary directory: {cleanup_err}", flush=True)
+            log(f"⚠️ Could not clean up temporary directory: {cleanup_err}")
 
         # Run the debug script to check InfluxDB data
         check_influxdb_data()
 
 def check_influxdb_data():
     """Run the debug_influx script to check InfluxDB data"""
-    print("\n📊 Checking InfluxDB data after job completion...", flush=True)
+    log("\n📊 Checking InfluxDB data after job completion...")
     
     try:
         # First try to import the module and run the function
@@ -805,12 +814,12 @@ def check_influxdb_data():
             import debug_influx
             result = debug_influx.check_measurements()
             if result:
-                print("✅ Successfully checked InfluxDB data", flush=True)
+                log("✅ Successfully checked InfluxDB data")
             else:
-                print("⚠️ Issues found when checking InfluxDB data", flush=True)
+                log("⚠️ Issues found when checking InfluxDB data")
         except ImportError:
             # If import fails, try to run the script as a subprocess
-            print("⚠️ Could not import debug_influx module, trying subprocess", flush=True)
+            log("⚠️ Could not import debug_influx module, trying subprocess")
             import subprocess
             script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "debug_influx.py")
             
@@ -826,13 +835,13 @@ def check_influxdb_data():
                 
                 if result.returncode == 0:
                     print(result.stdout, flush=True)
-                    print("✅ Successfully ran debug_influx.py", flush=True)
+                    log("✅ Successfully ran debug_influx.py")
                 else:
-                    print(f"⚠️ Error running debug_influx.py: {result.stderr}", flush=True)
+                    log(f"⚠️ Error running debug_influx.py: {result.stderr}")
             else:
-                print(f"❌ Could not find debug_influx.py at {script_path}", flush=True)
+                log(f"❌ Could not find debug_influx.py at {script_path}")
     except Exception as e:
-        print(f"❌ Error checking InfluxDB data: {e}", flush=True)
+        log(f"❌ Error checking InfluxDB data: {e}")
         traceback.print_exc()
 
 # Run immediately on startup for testing
