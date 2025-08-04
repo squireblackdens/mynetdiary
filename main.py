@@ -261,21 +261,8 @@ def run_job():
                                 print(f"⚠️ Could not parse date string: {date_time_val}", flush=True)
                                 continue
                         elif isinstance(date_time_val, float):
-                            # Handle Excel date (float days since 1900-01-01)
-                            # Get the integer part (days) and fractional part (time)
-                            days = int(date_time_val)
-                            frac_of_day = date_time_val - days
-                            
-                            # Excel dates start from 1900-01-01, with 1 = 1900-01-01
-                            # But there's a leap year bug, so we use 1899-12-30 as base
-                            base_date = datetime(1899, 12, 30)
-                            
-                            # Add days and convert fractional day to hours/minutes
-                            date_time_obj_naive = base_date + timedelta(days=days)
-                            
-                            # Add time component (frac_of_day * 24 hours * 60 minutes * 60 seconds)
-                            seconds = int(frac_of_day * 86400)  # 86400 = 24*60*60
-                            date_time_obj_naive += timedelta(seconds=seconds)
+                            # Use xlrd's built-in function to correctly convert Excel date float to datetime
+                            date_time_obj_naive = xlrd.xldate_as_datetime(date_time_val, workbook.datemode)
                         else:
                             print(f"⚠️ Unknown date format: {type(date_time_val)}", flush=True)
                             continue
@@ -611,7 +598,7 @@ def run_job():
                                             total_sat_fat += float(row['Saturated Fat, g'])
                                         
                                         # Trans Fat
-                                        if 'Trans Fat, g' in row and not pd.isna row['Trans Fat, g']:
+                                        if 'Trans Fat, g' in row and not pd.isna(row['Trans Fat, g']):
                                             total_trans_fat += float(row['Trans Fat, g'])
                                         
                                         # Net Carbs
