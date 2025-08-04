@@ -470,65 +470,64 @@ def run_job():
                         point.time(utc_timestamp, WritePrecision.NS)
                         data_points.append(point)
                 
-                    # Create a summary point for the entire meal, but not for snacks
-                    if meal_name != "Snacks":
-                        try:
-                            if earliest_time and len(entries) > 0:
-                                log(f"📊 Creating meal summary for {meal_name} on {meal_date} at {earliest_time.strftime('%H:%M')}")
+                    # Create a summary point for the entire meal
+                    try:
+                        if earliest_time and len(entries) > 0:
+                            log(f"📊 Creating meal summary for {meal_name} on {meal_date} at {earliest_time.strftime('%H:%M')}")
+                            
+                            # Create a separate summary point
+                            summary_point = Point("meal_summary")
+                            summary_point.tag("meal", meal_name)
+                            summary_point.tag("date", meal_date.isoformat())
+                            
+                            # Add nutritional fields - only add non-zero values
+                            summary_point.field("food_count", len(entries))
+                            
+                            if total_calories > 0:
+                                summary_point.field("calories", total_calories)
+                                log(f"   Total calories: {total_calories:.1f}")
                                 
-                                # Create a separate summary point
-                                summary_point = Point("meal_summary")
-                                summary_point.tag("meal", meal_name)
-                                summary_point.tag("date", meal_date.isoformat())
+                            if total_fat > 0:
+                                summary_point.field("total_fat", total_fat)
+                                log(f"   Total fat: {total_fat:.1f}g")
                                 
-                                # Add nutritional fields - only add non-zero values
-                                summary_point.field("food_count", len(entries))
+                            if total_carbs > 0:
+                                summary_point.field("total_carbs", total_carbs)
+                                log(f"   Total carbs: {total_carbs:.1f}g")
                                 
-                                if total_calories > 0:
-                                    summary_point.field("calories", total_calories)
-                                    log(f"   Total calories: {total_calories:.1f}")
-                                    
-                                if total_fat > 0:
-                                    summary_point.field("total_fat", total_fat)
-                                    log(f"   Total fat: {total_fat:.1f}g")
-                                    
-                                if total_carbs > 0:
-                                    summary_point.field("total_carbs", total_carbs)
-                                    log(f"   Total carbs: {total_carbs:.1f}g")
-                                    
-                                if total_protein > 0:
-                                    summary_point.field("protein", total_protein)
-                                    log(f"   Total protein: {total_protein:.1f}g")
-                                    
-                                if total_sat_fat > 0:
-                                    summary_point.field("saturated_fat", total_sat_fat)
-                                    
-                                if total_trans_fat > 0:
-                                    summary_point.field("trans_fat", total_trans_fat)
-                                    
-                                if total_net_carbs > 0:
-                                    summary_point.field("net_carbs", total_net_carbs)
-                                    
-                                if total_fiber > 0:
-                                    summary_point.field("fiber", total_fiber)
-                                    
-                                if total_sodium > 0:
-                                    summary_point.field("sodium", total_sodium)
-                                    
-                                if total_calcium > 0:
-                                    summary_point.field("calcium", total_calcium)
+                            if total_protein > 0:
+                                summary_point.field("protein", total_protein)
+                                log(f"   Total protein: {total_protein:.1f}g")
                                 
-                                # Convert the timezone-aware datetime to UTC before writing
-                                utc_timestamp = earliest_time.astimezone(pytz.utc)
-                                summary_point.time(utc_timestamp, WritePrecision.NS)
+                            if total_sat_fat > 0:
+                                summary_point.field("saturated_fat", total_sat_fat)
                                 
-                                # Add to the list of points to write
-                                data_points.append(summary_point)
+                            if total_trans_fat > 0:
+                                summary_point.field("trans_fat", total_trans_fat)
                                 
-                                log(f"✅ Meal summary point created and added to data_points array. Total points: {len(data_points)}")
-                        except Exception as summary_err:
-                            log(f"❌ Error creating meal summary: {summary_err}")
-                            traceback.print_exc()
+                            if total_net_carbs > 0:
+                                summary_point.field("net_carbs", total_net_carbs)
+                                
+                            if total_fiber > 0:
+                                summary_point.field("fiber", total_fiber)
+                                
+                            if total_sodium > 0:
+                                summary_point.field("sodium", total_sodium)
+                                
+                            if total_calcium > 0:
+                                summary_point.field("calcium", total_calcium)
+                            
+                            # Convert the timezone-aware datetime to UTC before writing
+                            utc_timestamp = earliest_time.astimezone(pytz.utc)
+                            summary_point.time(utc_timestamp, WritePrecision.NS)
+                            
+                            # Add to the list of points to write
+                            data_points.append(summary_point)
+                            
+                            log(f"✅ Meal summary point created and added to data_points array. Total points: {len(data_points)}")
+                    except Exception as summary_err:
+                        log(f"❌ Error creating meal summary: {summary_err}")
+                        traceback.print_exc()
             
             except Exception as xlrd_err:
                 log(f"⚠️ Error using xlrd to process Excel file: {xlrd_err}")
@@ -675,65 +674,64 @@ def run_job():
                                     
                                     data_points.append(point)
                             
-                            # Create a summary point for the entire meal, but not for snacks
-                            if meal_name != "Snacks":
-                                try:
-                                    if earliest_time and len(meal_group) > 0:
-                                        log(f"📊 Creating meal summary for {meal_name} on {meal_date} at {earliest_time.strftime('%H:%M')}")
+                            # Create a summary point for the entire meal
+                            try:
+                                if earliest_time and len(meal_group) > 0:
+                                    log(f"📊 Creating meal summary for {meal_name} on {meal_date} at {earliest_time.strftime('%H:%M')}")
+                                    
+                                    # Create a separate summary point
+                                    summary_point = Point("meal_summary")
+                                    summary_point.tag("meal", meal_name)
+                                    summary_point.tag("date", meal_date.isoformat())
+                                    
+                                    # Add nutritional fields - only add non-zero values
+                                    summary_point.field("food_count", len(meal_group))
+                                    
+                                    if total_calories > 0:
+                                        summary_point.field("calories", total_calories)
+                                        log(f"   Total calories: {total_calories:.1f}")
                                         
-                                        # Create a separate summary point
-                                        summary_point = Point("meal_summary")
-                                        summary_point.tag("meal", meal_name)
-                                        summary_point.tag("date", meal_date.isoformat())
+                                    if total_fat > 0:
+                                        summary_point.field("total_fat", total_fat)
+                                        log(f"   Total fat: {total_fat:.1f}g")
                                         
-                                        # Add nutritional fields - only add non-zero values
-                                        summary_point.field("food_count", len(meal_group))
+                                    if total_carbs > 0:
+                                        summary_point.field("total_carbs", total_carbs)
+                                        log(f"   Total carbs: {total_carbs:.1f}g")
                                         
-                                        if total_calories > 0:
-                                            summary_point.field("calories", total_calories)
-                                            log(f"   Total calories: {total_calories:.1f}")
-                                            
-                                        if total_fat > 0:
-                                            summary_point.field("total_fat", total_fat)
-                                            log(f"   Total fat: {total_fat:.1f}g")
-                                            
-                                        if total_carbs > 0:
-                                            summary_point.field("total_carbs", total_carbs)
-                                            log(f"   Total carbs: {total_carbs:.1f}g")
-                                            
-                                        if total_protein > 0:
-                                            summary_point.field("protein", total_protein)
-                                            log(f"   Total protein: {total_protein:.1f}g")
-                                            
-                                        if total_sat_fat > 0:
-                                            summary_point.field("saturated_fat", total_sat_fat)
-                                            
-                                        if total_trans_fat > 0:
-                                            summary_point.field("trans_fat", total_trans_fat)
-                                            
-                                        if total_net_carbs > 0:
-                                            summary_point.field("net_carbs", total_net_carbs)
-                                            
-                                        if total_fiber > 0:
-                                            summary_point.field("fiber", total_fiber)
-                                            
-                                        if total_sodium > 0:
-                                            summary_point.field("sodium", total_sodium)
-                                            
-                                        if total_calcium > 0:
-                                            summary_point.field("calcium", total_calcium)
+                                    if total_protein > 0:
+                                        summary_point.field("protein", total_protein)
+                                        log(f"   Total protein: {total_protein:.1f}g")
                                         
-                                        # Convert the timezone-aware datetime to UTC before writing
-                                        utc_timestamp = earliest_time.astimezone(pytz.utc)
-                                        summary_point.time(utc_timestamp, WritePrecision.NS)
+                                    if total_sat_fat > 0:
+                                        summary_point.field("saturated_fat", total_sat_fat)
                                         
-                                        # Add to the list of points to write
-                                        data_points.append(summary_point)
+                                    if total_trans_fat > 0:
+                                        summary_point.field("trans_fat", total_trans_fat)
                                         
-                                        log(f"✅ Meal summary point created and added to data_points array. Total points: {len(data_points)}")
-                                except Exception as summary_err:
-                                    log(f"❌ Error creating meal summary: {summary_err}")
-                                    traceback.print_exc()
+                                    if total_net_carbs > 0:
+                                        summary_point.field("net_carbs", total_net_carbs)
+                                        
+                                    if total_fiber > 0:
+                                        summary_point.field("fiber", total_fiber)
+                                        
+                                    if total_sodium > 0:
+                                        summary_point.field("sodium", total_sodium)
+                                        
+                                    if total_calcium > 0:
+                                        summary_point.field("calcium", total_calcium)
+                                    
+                                    # Convert the timezone-aware datetime to UTC before writing
+                                    utc_timestamp = earliest_time.astimezone(pytz.utc)
+                                    summary_point.time(utc_timestamp, WritePrecision.NS)
+                                    
+                                    # Add to the list of points to write
+                                    data_points.append(summary_point)
+                                    
+                                    log(f"✅ Meal summary point created and added to data_points array. Total points: {len(data_points)}")
+                            except Exception as summary_err:
+                                log(f"❌ Error creating meal summary: {summary_err}")
+                                traceback.print_exc()
                 except Exception as pandas_err:
                     log(f"❌ Error using pandas to process Excel file: {pandas_err}")
                     traceback.print_exc()
