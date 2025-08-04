@@ -517,8 +517,9 @@ def run_job():
                                 if total_calcium > 0:
                                     summary_point.field("calcium", total_calcium)
                                 
-                                # Use the earliest timestamp for the meal
-                                summary_point.time(earliest_time, WritePrecision.NS)
+                                # Convert the timezone-aware datetime to UTC before writing
+                                utc_timestamp = earliest_time.astimezone(pytz.utc)
+                                summary_point.time(utc_timestamp, WritePrecision.NS)
                                 
                                 # Add to the list of points to write
                                 data_points.append(summary_point)
@@ -603,7 +604,7 @@ def run_job():
                                             total_sat_fat += float(row['Saturated Fat, g'])
                                         
                                         # Trans Fat
-                                        if 'Trans Fat, g' in row and not pd.isna(row['Trans Fat, g']):
+                                        if 'Trans Fat, g' in row and not pd.isna row['Trans Fat, g']:
                                             total_trans_fat += float(row['Trans Fat, g'])
                                         
                                         # Net Carbs
@@ -720,8 +721,9 @@ def run_job():
                                         if total_calcium > 0:
                                             summary_point.field("calcium", total_calcium)
                                         
-                                        # Use the earliest timestamp for the meal
-                                        summary_point.time(earliest_time.to_pydatetime(), WritePrecision.NS)
+                                        # Convert the timezone-aware datetime to UTC before writing
+                                        utc_timestamp = earliest_time.astimezone(pytz.utc)
+                                        summary_point.time(utc_timestamp, WritePrecision.NS)
                                         
                                         # Add to the list of points to write
                                         data_points.append(summary_point)
