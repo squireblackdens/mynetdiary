@@ -465,8 +465,9 @@ def run_job():
                         if 'Name' in row_data:
                             point.tag("food_name", str(row_data['Name']))
                         
-                        # Use the parsed timestamp for the data point
-                        point.time(timestamp, WritePrecision.NS)
+                        # Use the parsed timestamp for the data point, ensuring it's in UTC
+                        utc_timestamp = timestamp.astimezone(pytz.utc)
+                        point.time(utc_timestamp, WritePrecision.NS)
                         data_points.append(point)
                 
                     # Create a summary point for the entire meal, but not for snacks
@@ -604,7 +605,7 @@ def run_job():
                                             total_sat_fat += float(row['Saturated Fat, g'])
                                         
                                         # Trans Fat
-                                        if 'Trans Fat, g' in row and not pd.isna(row['Trans Fat, g']):
+                                        if 'Trans Fat, g' in row and not pd.isna row['Trans Fat, g']:
                                             total_trans_fat += float(row['Trans Fat, g'])
                                         
                                         # Net Carbs
@@ -667,9 +668,10 @@ def run_job():
                                     if 'Name' in row:
                                         point.tag("food_name", str(row['Name']))
                                     
-                                    # Set timestamp
+                                    # Set timestamp, ensuring it's in UTC
                                     timestamp = row['Date & Time']
-                                    point.time(timestamp.to_pydatetime(), WritePrecision.NS)
+                                    utc_timestamp = timestamp.to_pydatetime().astimezone(pytz.utc)
+                                    point.time(utc_timestamp, WritePrecision.NS)
                                     
                                     data_points.append(point)
                             
