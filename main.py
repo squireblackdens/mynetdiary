@@ -49,6 +49,10 @@ def run_job():
     chrome_options.add_argument("--disable-crash-reporter")
     chrome_options.add_argument("--no-zygote")
     chrome_options.add_argument("--single-process")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-software-rasterizer")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--remote-debugging-port=0")
     
     # Specify unique user data directory to avoid conflicts
     chrome_options.add_argument(f"--user-data-dir={temp_dir}")
