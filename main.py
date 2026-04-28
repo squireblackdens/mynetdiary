@@ -152,7 +152,7 @@ def run_job():
 
         # Navigate directly to XLS export URL
         log("🔍 Navigating to XLS download URL")
-        driver.get("https://www.mynetdiary.com/exportData.do?year=2025")
+        driver.get("https://www.mynetdiary.com/exportData.do?year=2026")
         time.sleep(5)  # Wait for download to start
         
         # Take a screenshot after navigation to download URL
@@ -183,7 +183,7 @@ def run_job():
             log(f"🖼 Screenshot after retry: {retry_screenshot}")
             
             # Try direct navigation to download URL again
-            driver.get("https://www.mynetdiary.com/exportData.do?year=2025")
+            driver.get("https://www.mynetdiary.com/exportData.do?year=2026")
             time.sleep(5)  # Wait for download to start
             
             retry_download_screenshot = f"/app/downloads/retry_download_{datetime.now().strftime('%Y%m%d-%H%M%S')}.png"
